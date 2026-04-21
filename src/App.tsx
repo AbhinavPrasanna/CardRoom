@@ -1,12 +1,12 @@
 import { useReducer, useState } from "react";
 import "./App.css";
-import { LobbyHub, initialLobbies, type GameStartConfig, type TableLobby } from "./components/LobbyHub";
+import { LobbyHub, createDefaultLobby, type GameStartConfig, type TableLobby } from "./components/LobbyHub";
 import { MusicPlayer } from "./components/MusicPlayer";
 import { PokerTable } from "./components/PokerTable";
 import { createInitialStateFromSeats, reduceGame } from "./game/engine";
 
 export default function App() {
-  const [lobbies, setLobbies] = useState<TableLobby[]>(initialLobbies);
+  const [lobby, setLobby] = useState<TableLobby>(createDefaultLobby);
   const [game, setGame] = useState<GameStartConfig | null>(null);
 
   return (
@@ -15,7 +15,7 @@ export default function App() {
       {game ? (
         <GameSession key={`${game.lobbyId}-${game.seats.join("")}`} config={game} onLeave={() => setGame(null)} />
       ) : (
-        <LobbyHub lobbies={lobbies} setLobbies={setLobbies} onPlay={setGame} />
+        <LobbyHub lobby={lobby} setLobby={setLobby} onPlay={setGame} />
       )}
     </>
   );

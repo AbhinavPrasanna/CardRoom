@@ -17,11 +17,11 @@ type ReactionToast = {
 
 const SEAT_POS: Record<number, { top: string; left: string }> = {
   0: { top: "88%", left: "50%" },
-  1: { top: "78%", left: "82%" },
-  2: { top: "42%", left: "92%" },
+  1: { top: "78%", left: "85%" },
+  2: { top: "42%", left: "94%" },
   3: { top: "12%", left: "50%" },
-  4: { top: "42%", left: "8%" },
-  5: { top: "78%", left: "18%" },
+  4: { top: "42%", left: "6%" },
+  5: { top: "78%", left: "15%" },
 };
 
 type Props = {
