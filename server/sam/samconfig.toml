@@ -1,0 +1,13 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "abhinav-card-room"
+resolve_s3 = true
+s3_prefix = "abhinav-card-room"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "StageName=\"prod\""
+image_repositories = []
+
+[default.global.parameters]
+region = "us-west-1"

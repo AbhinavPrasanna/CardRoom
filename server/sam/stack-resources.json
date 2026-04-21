@@ -1,0 +1,79 @@
+﻿{
+    "StackResources": [
+        {
+            "StackName": "abhinav-card-room",
+            "StackId": "arn:aws:cloudformation:us-west-1:221556120809:stack/abhinav-card-room/1f0b9360-3dc5-11f1-8d92-06a6241401e1",
+            "LogicalResourceId": "ConnectFunctionRole",
+            "PhysicalResourceId": "abhinav-card-room-ConnectFunctionRole-vju9FTvur3xe",
+            "ResourceType": "AWS::IAM::Role",
+            "Timestamp": "2026-04-21T21:12:55.203000+00:00",
+            "ResourceStatus": "DELETE_FAILED",
+            "ResourceStatusReason": "Resource handler returned message: \"User: arn:aws:sts::221556120809:assumed-role/AWSReservedSSO_PowerUserAccess_1f8be1971cbb606f/APrasanna is not authorized to perform: iam:DeleteRolePolicy on resource: role abhinav-card-room-ConnectFunctionRole-vju9FTvur3xe because no identity-based policy allows the iam:DeleteRolePolicy action (Service: Iam, Status Code: 403, Request ID: 068bf993-6edc-4f3d-9827-9f4852ad5b4a) (SDK Attempt Count: 1)\" (RequestToken: aa8bdec3-1c89-02f0-d713-c5edbc7df827, HandlerErrorCode: AccessDenied)",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "StackName": "abhinav-card-room",
+            "StackId": "arn:aws:cloudformation:us-west-1:221556120809:stack/abhinav-card-room/1f0b9360-3dc5-11f1-8d92-06a6241401e1",
+            "LogicalResourceId": "ConnectionsTable",
+            "PhysicalResourceId": "abhinav-card-room-ConnectionsTable-1O85SXKQ1OPDK",
+            "ResourceType": "AWS::DynamoDB::Table",
+            "Timestamp": "2026-04-21T21:01:33.330000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "StackName": "abhinav-card-room",
+            "StackId": "arn:aws:cloudformation:us-west-1:221556120809:stack/abhinav-card-room/1f0b9360-3dc5-11f1-8d92-06a6241401e1",
+            "LogicalResourceId": "DefaultFunctionRole",
+            "PhysicalResourceId": "abhinav-card-room-DefaultFunctionRole-IkMZSfTRVMjx",
+            "ResourceType": "AWS::IAM::Role",
+            "Timestamp": "2026-04-21T21:12:55.233000+00:00",
+            "ResourceStatus": "DELETE_FAILED",
+            "ResourceStatusReason": "Resource handler returned message: \"User: arn:aws:sts::221556120809:assumed-role/AWSReservedSSO_PowerUserAccess_1f8be1971cbb606f/APrasanna is not authorized to perform: iam:DeleteRolePolicy on resource: role abhinav-card-room-DefaultFunctionRole-IkMZSfTRVMjx because no identity-based policy allows the iam:DeleteRolePolicy action (Service: Iam, Status Code: 403, Request ID: 3c5fbf54-ee8f-4a06-8208-ca63534ffb59) (SDK Attempt Count: 1)\" (RequestToken: 9ddb0f3a-f303-0463-b1e1-6f927341fbd6, HandlerErrorCode: AccessDenied)",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "StackName": "abhinav-card-room",
+            "StackId": "arn:aws:cloudformation:us-west-1:221556120809:stack/abhinav-card-room/1f0b9360-3dc5-11f1-8d92-06a6241401e1",
+            "LogicalResourceId": "DisconnectFunctionRole",
+            "PhysicalResourceId": "abhinav-card-room-DisconnectFunctionRole-GKB2UcSD9VQF",
+            "ResourceType": "AWS::IAM::Role",
+            "Timestamp": "2026-04-21T21:12:55.295000+00:00",
+            "ResourceStatus": "DELETE_FAILED",
+            "ResourceStatusReason": "Resource handler returned message: \"User: arn:aws:sts::221556120809:assumed-role/AWSReservedSSO_PowerUserAccess_1f8be1971cbb606f/APrasanna is not authorized to perform: iam:DeleteRolePolicy on resource: role abhinav-card-room-DisconnectFunctionRole-GKB2UcSD9VQF because no identity-based policy allows the iam:DeleteRolePolicy action (Service: Iam, Status Code: 403, Request ID: 11140a58-0e2a-48f7-b6e0-e707d354673c) (SDK Attempt Count: 1)\" (RequestToken: 868ea476-923e-2553-dc47-f150e552f084, HandlerErrorCode: AccessDenied)",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "StackName": "abhinav-card-room",
+            "StackId": "arn:aws:cloudformation:us-west-1:221556120809:stack/abhinav-card-room/1f0b9360-3dc5-11f1-8d92-06a6241401e1",
+            "LogicalResourceId": "LobbiesTable",
+            "PhysicalResourceId": "abhinav-card-room-LobbiesTable-C4YM00IU3X4G",
+            "ResourceType": "AWS::DynamoDB::Table",
+            "Timestamp": "2026-04-21T21:01:23.054000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        },
+        {
+            "StackName": "abhinav-card-room",
+            "StackId": "arn:aws:cloudformation:us-west-1:221556120809:stack/abhinav-card-room/1f0b9360-3dc5-11f1-8d92-06a6241401e1",
+            "LogicalResourceId": "WebSocketApi",
+            "PhysicalResourceId": "33dqeke0bc",
+            "ResourceType": "AWS::ApiGatewayV2::Api",
+            "Timestamp": "2026-04-21T21:01:11.550000+00:00",
+            "ResourceStatus": "CREATE_COMPLETE",
+            "DriftInformation": {
+                "StackResourceDriftStatus": "NOT_CHECKED"
+            }
+        }
+    ]
+}

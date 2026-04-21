@@ -1,0 +1,287 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: "Card Room \u2014 API Gateway WebSocket + Lambda + DynamoDB for lobby\
+  \ sync."
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Timeout: 15
+    MemorySize: 256
+    Architectures:
+    - arm64
+Parameters:
+  StageName:
+    Type: String
+    Default: prod
+    Description: WebSocket API stage name
+Resources:
+  LobbiesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: lobbyId
+        AttributeType: S
+      KeySchema:
+      - AttributeName: lobbyId
+        KeyType: HASH
+  ConnectionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: connectionId
+        AttributeType: S
+      - AttributeName: lobbyId
+        AttributeType: S
+      KeySchema:
+      - AttributeName: connectionId
+        KeyType: HASH
+      GlobalSecondaryIndexes:
+      - IndexName: byLobby
+        KeySchema:
+        - AttributeName: lobbyId
+          KeyType: HASH
+        - AttributeName: connectionId
+          KeyType: RANGE
+        Projection:
+          ProjectionType: ALL
+  WebSocketApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ws
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: $request.body.action
+  ConnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId:
+        Ref: WebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ConnectFunction.Arn}/invocations
+  ConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId:
+        Ref: WebSocketApi
+      RouteKey: $connect
+      AuthorizationType: NONE
+      Target:
+        Fn::Sub: integrations/${ConnectIntegration}
+  DisconnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId:
+        Ref: WebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DisconnectFunction.Arn}/invocations
+  DisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId:
+        Ref: WebSocketApi
+      RouteKey: $disconnect
+      AuthorizationType: NONE
+      Target:
+        Fn::Sub: integrations/${DisconnectIntegration}
+  DefaultIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId:
+        Ref: WebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DefaultFunction.Arn}/invocations
+  DefaultRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId:
+        Ref: WebSocketApi
+      RouteKey: $default
+      AuthorizationType: NONE
+      Target:
+        Fn::Sub: integrations/${DefaultIntegration}
+  RouteCreateLobby:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId:
+        Ref: WebSocketApi
+      RouteKey: createLobby
+      AuthorizationType: NONE
+      Target:
+        Fn::Sub: integrations/${DefaultIntegration}
+  RouteJoinLobby:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId:
+        Ref: WebSocketApi
+      RouteKey: joinLobby
+      AuthorizationType: NONE
+      Target:
+        Fn::Sub: integrations/${DefaultIntegration}
+  RouteSyncLobby:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId:
+        Ref: WebSocketApi
+      RouteKey: syncLobby
+      AuthorizationType: NONE
+      Target:
+        Fn::Sub: integrations/${DefaultIntegration}
+  RouteLeaveLobby:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId:
+        Ref: WebSocketApi
+      RouteKey: leaveLobby
+      AuthorizationType: NONE
+      Target:
+        Fn::Sub: integrations/${DefaultIntegration}
+  RoutePing:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId:
+        Ref: WebSocketApi
+      RouteKey: ping
+      AuthorizationType: NONE
+      Target:
+        Fn::Sub: integrations/${DefaultIntegration}
+  WebSocketDeployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    DependsOn:
+    - ConnectRoute
+    - DisconnectRoute
+    - DefaultRoute
+    - RouteCreateLobby
+    - RouteJoinLobby
+    - RouteSyncLobby
+    - RouteLeaveLobby
+    - RoutePing
+    Properties:
+      ApiId:
+        Ref: WebSocketApi
+  WebSocketStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId:
+        Ref: WebSocketApi
+      DeploymentId:
+        Ref: WebSocketDeployment
+      StageName:
+        Ref: StageName
+  ConnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ConnectFunction
+      Handler: index.connect
+      Environment:
+        Variables:
+          CONNECTIONS_TABLE:
+            Ref: ConnectionsTable
+          LOBBIES_TABLE:
+            Ref: LobbiesTable
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ConnectionsTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: LobbiesTable
+    Metadata:
+      SamResourceId: ConnectFunction
+  DisconnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: DisconnectFunction
+      Handler: index.disconnect
+      Environment:
+        Variables:
+          CONNECTIONS_TABLE:
+            Ref: ConnectionsTable
+          LOBBIES_TABLE:
+            Ref: LobbiesTable
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ConnectionsTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: LobbiesTable
+      - Statement:
+        - Effect: Allow
+          Action:
+          - execute-api:ManageConnections
+          Resource:
+            Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/${StageName}/POST/@connections/*
+    Metadata:
+      SamResourceId: DisconnectFunction
+  DefaultFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: DefaultFunction
+      Handler: index.defaultHandler
+      Environment:
+        Variables:
+          CONNECTIONS_TABLE:
+            Ref: ConnectionsTable
+          LOBBIES_TABLE:
+            Ref: LobbiesTable
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: ConnectionsTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: LobbiesTable
+      - Statement:
+        - Effect: Allow
+          Action:
+          - execute-api:ManageConnections
+          Resource:
+            Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/${StageName}/POST/@connections/*
+    Metadata:
+      SamResourceId: DefaultFunction
+  ConnectPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Ref: ConnectFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*/$connect
+  DisconnectPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Ref: DisconnectFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*/$disconnect
+  DefaultPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Ref: DefaultFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketApi}/*/*
+Outputs:
+  WebSocketUrl:
+    Description: Browser WebSocket URL (wss)
+    Value:
+      Fn::Sub: wss://${WebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${WebSocketStage}
+  ConnectionsTableName:
+    Value:
+      Ref: ConnectionsTable
+  LobbiesTableName:
+    Value:
+      Ref: LobbiesTable
+  WebSocketApiId:
+    Value:
+      Ref: WebSocketApi

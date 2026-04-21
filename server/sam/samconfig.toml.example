@@ -1,0 +1,18 @@
+# Copy to `samconfig.toml` in this folder, edit `region`, then run `sam deploy` from this directory.
+#   copy samconfig.toml.example samconfig.toml
+
+version = 0.1
+
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.deploy.parameters]
+stack_name = "card-room-ws"
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+region = "us-east-1"
+
+# Optional: template Parameter StageName (default is prod in template.yaml)
+parameter_overrides = "StageName=prod"
