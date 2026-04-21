@@ -162,6 +162,16 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
     send({ action: "joinLobby", lobbyId: code, playerName: playerName.trim() || "Player" });
   };
 
+  const copyLobbyCode = async () => {
+    if (!lobby.id) return;
+    try {
+      await navigator.clipboard.writeText(lobby.id);
+      setServerHint("Lobby code copied — send it to your friend.");
+    } catch {
+      setServerHint(`Share this code manually: ${lobby.id}`);
+    }
+  };
+
   const inputStyle = {
     width: "100%" as const,
     maxWidth: 360,
@@ -178,13 +188,38 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
         <div>
           <h1>Abhinav&apos;s Card Room</h1>
           <p className="online-lobby-lead">
-            Online lobby on AWS: WebSocket API, Lambda, DynamoDB. The felt still runs locally in your browser; the
-            lobby code, seats, and buy-ins stay in sync for everyone connected.
+            The <strong>lobby</strong> (code + seat map + buy-ins) syncs over AWS for everyone in the same code. The
+            poker <strong>table</strong> after you click play still runs only in <strong>this browser</strong> — it is
+            not a shared online hand yet.
           </p>
         </div>
       </header>
 
       <section className="lobby lobby-wide lobby-online">
+        <div className="online-lobby-friend-box">
+          <h3>Play with someone on Amplify (or any link)</h3>
+          <p style={{ margin: "0 0 0.5rem", color: "var(--muted)", fontSize: "0.84rem" }}>
+            At the top of the app, <strong>both</strong> people must choose <strong>Online lobby (AWS)</strong> — not
+            &quot;Local only&quot;. Same Amplify URL is fine; you are still two separate browsers.
+          </p>
+          <ol>
+            <li>
+              <strong>Host:</strong> Connect → <strong>Create new lobby</strong> → copy or read the{" "}
+              <strong>Active lobby</strong> code below.
+            </li>
+            <li>
+              <strong>Friend:</strong> Connect → type that code in <strong>CODE TO JOIN</strong> →{" "}
+              <strong>Join lobby</strong>. They should then see the <strong>same</strong> active code and seats as you.
+            </li>
+          </ol>
+          <p className="online-lobby-limitation">
+            If your friend never clicked <strong>Join lobby</strong> with your code, they are not in your room — Amplify
+            does not auto-match players. &quot;Open table &amp; play&quot; starts a separate local game on each device;
+            use the lobby first to agree on seats, then you can each open a table from the same layout if you want
+            parallel practice (true shared one-table multiplayer would need more backend work).
+          </p>
+        </div>
+
         <ul className="online-lobby-features">
           <li>
             <strong>Connect</strong> once with your display name, then <strong>create</strong> a code or{" "}
@@ -235,6 +270,7 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
                     onClick={() => {
                       send({ action: "leaveLobby" });
                       setSyncEnabled(false);
+                      setLobby(createDefaultLobby());
                     }}
                   >
                     Leave lobby (stay connected)
@@ -278,14 +314,21 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
               Join lobby
             </button>
           </div>
-          {lobby.id ? (
+          {syncEnabled && lobby.id ? (
             <div className="online-lobby-code-box">
-              <div className="online-lobby-code-box-label">Active lobby</div>
-              <code>{lobby.id}</code>
+              <div className="online-lobby-code-box-label">Active lobby — send this to your friend</div>
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.65rem" }}>
+                <code>{lobby.id}</code>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => void copyLobbyCode()}>
+                  Copy code
+                </button>
+              </div>
             </div>
           ) : (
             <p className="online-lobby-card-desc" style={{ marginTop: "0.65rem", marginBottom: 0 }}>
-              No lobby yet — create one or join with a code.
+              {status !== "open"
+                ? "Connect first, then the host creates a lobby or you join with a code."
+                : "No shared lobby on the server yet — host taps Create, or paste a code and Join."}
             </p>
           )}
           {serverHint ? <div className="online-lobby-hint-banner online-lobby-hint-banner--muted">{serverHint}</div> : null}
