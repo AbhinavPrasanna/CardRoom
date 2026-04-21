@@ -1,0 +1,53 @@
+:root {
+  color-scheme: dark;
+  --felt-mid: #116b4f;
+  --felt: #0d3b2c;
+  --felt-edge: #06261c;
+  --felt-rail: #1a4d3a;
+  --card-back-from: #1c2e8a;
+  --card-back-to: #0a174d;
+  --card-back-border: rgba(255, 255, 255, 0.14);
+  --gold: #d4a853;
+  --gold-dim: #9a7a3a;
+  --text: #e8f0ea;
+  --muted: #8aa89a;
+  --danger: #e85d5d;
+  --success: #5dd39e;
+  --panel: rgba(6, 24, 18, 0.92);
+  --card-white: #f7f4ef;
+  font-family: "DM Sans", system-ui, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--text);
+  background: radial-gradient(1200px 800px at 50% 20%, #123d2e 0%, #071510 55%, #030806 100%);
+  min-height: 100vh;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--gold);
+}
+
+.mono {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+}
