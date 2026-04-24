@@ -57,6 +57,10 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
       }
       if (msg.type === "presence") {
         setServerHint(msg.joined ? "Someone joined." : msg.left ? "Someone left." : "Presence update.");
+        // When someone joins, push latest lobby snapshot again to reduce stale-seat race windows.
+        if (msg.joined && syncEnabled && status === "open") {
+          send({ action: "syncLobby", lobby: lobby as WireLobby });
+        }
         return;
       }
       if (msg.type === "leftLobby") {
@@ -64,7 +68,7 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
       }
     };
     setOnMessage(handler);
-  }, [setOnMessage]);
+  }, [setOnMessage, lobby, send, status, syncEnabled]);
 
   useEffect(() => {
     try {

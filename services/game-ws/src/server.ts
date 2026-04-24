@@ -166,7 +166,32 @@ async function buildServer() {
         return;
       }
 
-      socket.send(JSON.stringify({ type: "error", message: "unknown action" } satisfies OutgoingMessage));
+      // Helpful backward-compat response when lobby actions are accidentally sent here.
+      if (
+        (data as { action?: string }).action === "createLobby" ||
+        (data as { action?: string }).action === "joinLobby" ||
+        (data as { action?: string }).action === "syncLobby" ||
+        (data as { action?: string }).action === "leaveLobby"
+      ) {
+        socket.send(
+          JSON.stringify({
+            type: "error",
+            message: "This endpoint is for gameplay sync only. Use the card-room endpoint for lobby actions.",
+          } satisfies OutgoingMessage),
+        );
+        return;
+      }
+
+      const action = (data as { action?: string }).action;
+      app.log.warn({ action }, "unknown action received");
+      socket.send(
+        JSON.stringify(
+          {
+            type: "error",
+            message: `unknown action${typeof action === "string" ? `: ${action}` : ""}`,
+          } satisfies OutgoingMessage,
+        ),
+      );
     });
 
     socket.on("close", () => removeSocketFromAllTables(socket, app.log));
