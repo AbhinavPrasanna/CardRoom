@@ -173,14 +173,20 @@ export function createInitialStateFromSeats(
   if (seats.length !== 6) throw new Error("Expected six seats");
   const players: Player[] = [];
   let botOrdinal = 0;
+  let humanOrdinal = 0;
+  let assignedLocal = false;
   for (let seat = 0; seat < 6; seat++) {
     const kind = seats[seat] ?? "empty";
     if (kind === "empty") continue;
     if (kind === "human") {
+      humanOrdinal++;
+      const isLocal = !assignedLocal;
+      if (isLocal) assignedLocal = true;
       players.push({
-        id: "human",
-        name: "You",
+        id: `human-${seat}`,
+        name: isLocal ? "You" : `Player ${humanOrdinal}`,
         isHuman: true,
+        isLocal,
         seat,
         stack: humanBuyIn,
         hole: null,
@@ -195,6 +201,7 @@ export function createInitialStateFromSeats(
         id: `bot-${seat}`,
         name: `Bot ${botOrdinal}`,
         isHuman: false,
+        isLocal: false,
         seat,
         stack: botBuyIn,
         hole: null,

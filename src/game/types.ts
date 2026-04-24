@@ -20,7 +20,10 @@ export type Street =
 export interface Player {
   id: string;
   name: string;
+  /** Human participant vs AI bot. */
   isHuman: boolean;
+  /** True only for this browser's own seat, false for everyone else. */
+  isLocal: boolean;
   seat: number;
   stack: number;
   hole: Card[] | null;
@@ -56,7 +59,7 @@ export interface GameState {
   message: string;
   handNumber: number;
   winners: { playerId: string; amount: number }[] | null;
-  /** Human must confirm before next hand */
+  /** UI must confirm before next hand */
   awaitingNextHand: boolean;
   /** All-in / no further action: next board card(s) wait for RUNOUT_STEP (UI timer) */
   pendingRunOut: boolean;

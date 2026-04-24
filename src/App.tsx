@@ -64,6 +64,8 @@ type GameWsIncoming =
   | { type: "presence"; tableId: string; seq: number }
   | { type: "tableState"; tableId: string; seq: number; state: unknown }
   | { type: "role"; tableId: string; role: "controller" | "viewer"; playerName?: string }
+  | { type: "seatOwners"; tableId: string; seatOwners: Record<string, string> }
+  | { type: "actionAccepted"; tableId: string; seat: number; gameAction: unknown; seq: number }
   | { type: "controlChanged"; tableId: string; seq: number }
   | { type: "pong"; t: number }
   | { type: "error"; message: string };
@@ -87,6 +89,11 @@ function GameSession({
   const [state, setState] = useState<GameState>(() =>
     createInitialStateFromSeats(config.seats, config.humanBuyIn, config.botBuyIn),
   );
+  const [playerName] = useState(() => {
+    if (typeof localStorage === "undefined") return "Player";
+    return (localStorage.getItem("card-room-player-name") || "Player").slice(0, 40);
+  });
+  const [seatOwners, setSeatOwners] = useState<Record<string, string>>({});
   const [isGameWsConnected, setIsGameWsConnected] = useState(!multiplayerEnabled);
   const [isController, setIsController] = useState(!multiplayerEnabled);
   const [syncHint, setSyncHint] = useState<string | null>(null);
@@ -111,28 +118,65 @@ function GameSession({
     [multiplayerEnabled, isController, config.lobbyId],
   );
 
+  const localSeat = (() => {
+    const entry = Object.entries(seatOwners).find(([, owner]) => owner === playerName);
+    if (!entry) return null;
+    const n = Number(entry[0]);
+    return Number.isInteger(n) ? n : null;
+  })();
+
   const requestControl = useCallback(() => {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN || !multiplayerEnabled) return;
     ws.send(JSON.stringify({ action: "claimControl", tableId: config.lobbyId }));
   }, [multiplayerEnabled, config.lobbyId]);
 
+  const takeSeat = useCallback(
+    (seat: number) => {
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN || !multiplayerEnabled) return;
+      ws.send(JSON.stringify({ action: "takeSeat", tableId: config.lobbyId, seat }));
+    },
+    [multiplayerEnabled, config.lobbyId],
+  );
+
+  const leaveSeat = useCallback(
+    (seat: number) => {
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN || !multiplayerEnabled) return;
+      ws.send(JSON.stringify({ action: "leaveSeat", tableId: config.lobbyId, seat }));
+    },
+    [multiplayerEnabled, config.lobbyId],
+  );
+
   const dispatch = useCallback(
     (action: GameAction) => {
-      if (multiplayerEnabled && !isController) return;
+      if (!multiplayerEnabled) {
+        setState((prev) => reduceGame(prev, action));
+        return;
+      }
+      if (localSeat == null) return;
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      ws.send(JSON.stringify({ action: "gameAction", tableId: config.lobbyId, seat: localSeat, gameAction: action }));
+    },
+    [multiplayerEnabled, localSeat, config.lobbyId],
+  );
+
+  const applyAcceptedAction = useCallback(
+    (action: GameAction) => {
+      if (!isController) return;
       setState((prev) => {
         const next = reduceGame(prev, action);
         publishState(next);
         return next;
       });
     },
-    [multiplayerEnabled, isController, publishState],
+    [isController, publishState],
   );
 
   useEffect(() => {
     if (!multiplayerEnabled || !gamePlayWsUrl) return;
-    const playerName =
-      (typeof localStorage !== "undefined" && localStorage.getItem("card-room-player-name")) || "Player";
     const sep = gamePlayWsUrl.includes("?") ? "&" : "?";
     const ws = new WebSocket(`${gamePlayWsUrl}${sep}playerName=${encodeURIComponent(playerName)}`);
     wsRef.current = ws;
@@ -162,11 +206,21 @@ function GameSession({
         setSyncHint(msg.message);
         return;
       }
+      if (msg.type === "seatOwners" && msg.tableId === config.lobbyId) {
+        setSeatOwners(msg.seatOwners ?? {});
+        return;
+      }
       if (msg.type === "role" && msg.tableId === config.lobbyId) {
         const controller = msg.role === "controller";
         setIsController(controller);
         if (controller) setSyncHint("You own the player seat for this table.");
         else setSyncHint("Spectator mode — seat owner controls actions.");
+        return;
+      }
+      if (msg.type === "actionAccepted" && msg.tableId === config.lobbyId) {
+        if (looksLikeGameAction(msg.gameAction)) {
+          applyAcceptedAction(msg.gameAction);
+        }
         return;
       }
       if (msg.type === "tableState" && msg.tableId === config.lobbyId && looksLikeGameState(msg.state)) {
@@ -183,7 +237,7 @@ function GameSession({
       ws.close();
       if (wsRef.current === ws) wsRef.current = null;
     };
-  }, [multiplayerEnabled, gamePlayWsUrl, config.lobbyId]);
+  }, [multiplayerEnabled, gamePlayWsUrl, config.lobbyId, playerName, applyAcceptedAction]);
 
   useEffect(() => {
     if (!multiplayerEnabled || !isController || !isGameWsConnected) return;
@@ -204,8 +258,30 @@ function GameSession({
             <p style={{ marginTop: "0.35rem", color: "var(--muted)" }}>
               Live sync: {isGameWsConnected ? "connected" : "disconnected"} · Role:{" "}
               {isController ? "controller" : "viewer"}
+              {localSeat != null ? ` · Seat ${localSeat}` : " · No seat claimed"}
               {syncHint ? ` · ${syncHint}` : ""}
             </p>
+          ) : null}
+          {multiplayerEnabled ? (
+            <div style={{ marginTop: "0.45rem", display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
+              {[0, 1, 2, 3, 4, 5].map((seat) => {
+                const owner = seatOwners[String(seat)];
+                const mine = owner === playerName;
+                const canClaim = !owner || mine;
+                return (
+                  <button
+                    key={seat}
+                    type="button"
+                    className={mine ? "btn btn-primary btn-sm" : "btn btn-secondary btn-sm"}
+                    disabled={!canClaim}
+                    onClick={() => (mine ? leaveSeat(seat) : takeSeat(seat))}
+                    title={owner ? `Owned by ${owner}` : "Unclaimed"}
+                  >
+                    Seat {seat}: {mine ? "Leave" : owner ? owner : "Claim"}
+                  </button>
+                );
+              })}
+            </div>
           ) : null}
         </div>
       </header>
@@ -215,7 +291,21 @@ function GameSession({
         onLeave={onLeave}
         isController={isController}
         onTakeControl={multiplayerEnabled ? requestControl : undefined}
+        localSeat={localSeat}
       />
     </div>
+  );
+}
+
+function looksLikeGameAction(v: unknown): v is GameAction {
+  if (!v || typeof v !== "object") return false;
+  const t = (v as { type?: unknown }).type;
+  return (
+    t === "NEW_HAND" ||
+    t === "FOLD" ||
+    t === "CHECK" ||
+    t === "CALL" ||
+    t === "RUNOUT_STEP" ||
+    t === "RAISE"
   );
 }

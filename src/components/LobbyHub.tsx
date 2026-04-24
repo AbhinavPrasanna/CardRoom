@@ -53,11 +53,6 @@ export function LobbyHub({ lobby, setLobby, onPlay }: Props) {
   const setSeat = (seat: number, kind: SeatKind) => {
     patchLobby((prev) => {
       const seats = [...prev.seats] as SeatKind[];
-      if (kind === "human") {
-        for (let i = 0; i < 6; i++) {
-          if (i !== seat && seats[i] === "human") seats[i] = "empty";
-        }
-      }
       seats[seat] = kind;
       return { ...prev, seats };
     });

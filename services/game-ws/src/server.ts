@@ -16,7 +16,7 @@ function normalizePlayerName(raw: unknown): string {
 function getOrCreateTable(tableId: string): TableState {
   let t = tables.get(tableId);
   if (!t) {
-    t = { sockets: new Set(), seq: 0 };
+    t = { sockets: new Set(), seq: 0, seatOwners: {} };
     tables.set(tableId, t);
   }
   return t;
@@ -40,6 +40,15 @@ function sendRolesToTable(tableId: string, table: TableState) {
   }
 }
 
+function sendSeatOwners(tableId: string, table: TableState, socket?: WebSocket) {
+  const msg: OutgoingMessage = { type: "seatOwners", tableId, seatOwners: table.seatOwners };
+  if (socket) {
+    if (socket.readyState === 1) socket.send(JSON.stringify(msg));
+    return;
+  }
+  broadcast(tableId, msg);
+}
+
 function removeSocketFromAllTables(socket: WebSocket, log: FastifyBaseLogger) {
   for (const [tableId, table] of tables) {
     if (!table.sockets.has(socket)) continue;
@@ -59,6 +68,16 @@ function removeSocketFromAllTables(socket: WebSocket, log: FastifyBaseLogger) {
       }
       sendRolesToTable(tableId, table);
     }
+    let ownersChanged = false;
+    for (const [seat, owner] of Object.entries(table.seatOwners)) {
+      if (owner !== leavingName) continue;
+      const stillHasOwner = [...table.sockets].some((s) => (socketPlayer.get(s) ?? "Player") === leavingName);
+      if (!stillHasOwner) {
+        delete table.seatOwners[seat];
+        ownersChanged = true;
+      }
+    }
+    if (ownersChanged) sendSeatOwners(tableId, table);
     if (table.sockets.size > 0) {
       table.seq += 1;
       broadcast(tableId, { type: "presence", tableId, seq: table.seq }, socket);
@@ -121,6 +140,7 @@ async function buildServer() {
         const joined: OutgoingMessage = { type: "joined", tableId, seq: table.seq };
         socket.send(JSON.stringify(joined));
         sendRole(tableId, table, socket);
+        sendSeatOwners(tableId, table, socket);
         if (table.state !== undefined) {
           socket.send(
             JSON.stringify({
@@ -135,6 +155,81 @@ async function buildServer() {
           table.seq += 1;
           broadcast(tableId, { type: "presence", tableId, seq: table.seq }, socket);
         }
+        return;
+      }
+
+      if (data.action === "takeSeat") {
+        const tableId = socketTable.get(socket);
+        const seat = Number(data.seat);
+        if (!tableId || tableId !== data.tableId || !Number.isInteger(seat) || seat < 0 || seat > 5) {
+          socket.send(JSON.stringify({ type: "error", message: "invalid seat claim" } satisfies OutgoingMessage));
+          return;
+        }
+        const table = tables.get(tableId);
+        if (!table) return;
+        const playerName = socketPlayer.get(socket) ?? "Player";
+        const current = table.seatOwners[String(seat)];
+        if (current && current !== playerName) {
+          socket.send(JSON.stringify({ type: "error", message: "seat already owned" } satisfies OutgoingMessage));
+          return;
+        }
+        table.seatOwners[String(seat)] = playerName;
+        table.seq += 1;
+        sendSeatOwners(tableId, table);
+        return;
+      }
+
+      if (data.action === "leaveSeat") {
+        const tableId = socketTable.get(socket);
+        const seat = Number(data.seat);
+        if (!tableId || tableId !== data.tableId || !Number.isInteger(seat) || seat < 0 || seat > 5) {
+          socket.send(JSON.stringify({ type: "error", message: "invalid seat release" } satisfies OutgoingMessage));
+          return;
+        }
+        const table = tables.get(tableId);
+        if (!table) return;
+        const playerName = socketPlayer.get(socket) ?? "Player";
+        if (table.seatOwners[String(seat)] !== playerName) {
+          socket.send(JSON.stringify({ type: "error", message: "you do not own this seat" } satisfies OutgoingMessage));
+          return;
+        }
+        delete table.seatOwners[String(seat)];
+        table.seq += 1;
+        sendSeatOwners(tableId, table);
+        return;
+      }
+
+      if (data.action === "gameAction") {
+        const tableId = socketTable.get(socket);
+        const seat = Number(data.seat);
+        if (!tableId || tableId !== data.tableId || !Number.isInteger(seat) || seat < 0 || seat > 5) {
+          socket.send(JSON.stringify({ type: "error", message: "invalid action seat" } satisfies OutgoingMessage));
+          return;
+        }
+        const table = tables.get(tableId);
+        if (!table) return;
+        const playerName = socketPlayer.get(socket) ?? "Player";
+        if (table.seatOwners[String(seat)] !== playerName) {
+          socket.send(JSON.stringify({ type: "error", message: "you do not own this seat" } satisfies OutgoingMessage));
+          return;
+        }
+        const st = table.state as { activeSeat?: number | null } | undefined;
+        const at = st?.activeSeat;
+        if (typeof at === "number" && at !== seat && (data.gameAction as { type?: string })?.type !== "NEW_HAND") {
+          socket.send(JSON.stringify({ type: "error", message: "not your turn" } satisfies OutgoingMessage));
+          return;
+        }
+        table.seq += 1;
+        broadcast(
+          tableId,
+          {
+            type: "actionAccepted",
+            tableId,
+            seat,
+            gameAction: data.gameAction,
+            seq: table.seq,
+          } satisfies OutgoingMessage,
+        );
         return;
       }
 

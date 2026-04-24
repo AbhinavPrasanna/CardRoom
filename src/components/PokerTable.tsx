@@ -30,9 +30,17 @@ type Props = {
   onLeave: () => void;
   isController?: boolean;
   onTakeControl?: () => void;
+  localSeat?: number | null;
 };
 
-export function PokerTable({ state, dispatch, onLeave, isController = true, onTakeControl }: Props) {
+export function PokerTable({
+  state,
+  dispatch,
+  onLeave,
+  isController = true,
+  onTakeControl,
+  localSeat = null,
+}: Props) {
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -62,7 +70,7 @@ export function PokerTable({ state, dispatch, onLeave, isController = true, onTa
     return () => window.clearTimeout(id);
   }, [state.pendingRunOut, state.street, state.board.length, dispatch, isController]);
 
-  const human = state.players.find((p) => p.isHuman) ?? null;
+  const human = localSeat == null ? null : (state.players.find((p) => p.seat === localSeat) ?? null);
   const isHumanTurn = human !== null && state.activeSeat === human.seat;
   const blinds = useMemo(() => sbBbSeats(state.players, state.buttonSeat), [state.players, state.buttonSeat]);
   const showBlinds = ["preflop", "flop", "turn", "river"].includes(state.street);
@@ -139,7 +147,10 @@ export function PokerTable({ state, dispatch, onLeave, isController = true, onTa
     return () => window.removeEventListener("keydown", onKey);
   }, [showWinnerDialog]);
 
-  const opponents = useMemo(() => state.players.filter((p) => !p.isHuman), [state.players]);
+  const opponents = useMemo(
+    () => state.players.filter((p) => (localSeat == null ? true : p.seat !== localSeat)),
+    [state.players, localSeat],
+  );
   const [reactionTargetSeat, setReactionTargetSeat] = useState<number | null>(null);
   const [reactionToasts, setReactionToasts] = useState<ReactionToast[]>([]);
   const [slapShakeSeat, setSlapShakeSeat] = useState<number | null>(null);
@@ -265,8 +276,8 @@ export function PokerTable({ state, dispatch, onLeave, isController = true, onTa
                   <div className="hole-cards">
                     {p.hole && p.hole.length === 2 ? (
                       <>
-                        <CardView card={p.hole[0]} faceDown={!p.isHuman} />
-                        <CardView card={p.hole[1]} faceDown={!p.isHuman} />
+                        <CardView card={p.hole[0]} faceDown={p.seat !== localSeat} />
+                        <CardView card={p.hole[1]} faceDown={p.seat !== localSeat} />
                       </>
                     ) : (
                       <>
@@ -275,7 +286,7 @@ export function PokerTable({ state, dispatch, onLeave, isController = true, onTa
                       </>
                     )}
                   </div>
-                  {p.isHuman && humanMadeHandName ? (
+                  {p.seat === localSeat && humanMadeHandName ? (
                     <div className="seat-you-hand mono" title="Best five-card hand using your hole cards and the board">
                       {humanMadeHandName}
                     </div>
@@ -423,7 +434,7 @@ export function PokerTable({ state, dispatch, onLeave, isController = true, onTa
         ) : state.pendingRunOut ? (
           <div className="msg-bar">Board running out…</div>
         ) : !human ? (
-          <div className="msg-bar">No human seat — add yourself in the lobby to use controls.</div>
+          <div className="msg-bar">You do not own an active seat on this table.</div>
         ) : (
           <div className="msg-bar">{state.activeSeat === null ? "—" : "Opponents are thinking…"}</div>
         )}
