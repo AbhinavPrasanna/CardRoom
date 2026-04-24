@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import "./App.css";
 import { LobbyHub, createDefaultLobby, type GameStartConfig, type TableLobby } from "./components/LobbyHub";
 import { OnlineLobbyHub } from "./components/OnlineLobbyHub";
@@ -108,10 +109,12 @@ function GameSession({
   const receivedRemoteStateRef = useRef(false);
   const stateRef = useRef(state);
   stateRef.current = state;
+  const isControllerRef = useRef(isController);
+  isControllerRef.current = isController;
 
   const publishState = useCallback(
     (nextState: GameState) => {
-      if (!multiplayerEnabled || !isController) return;
+      if (!multiplayerEnabled || !isControllerRef.current) return;
       const ws = wsRef.current;
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
       ws.send(
@@ -122,7 +125,7 @@ function GameSession({
         }),
       );
     },
-    [multiplayerEnabled, isController, config.lobbyId],
+    [multiplayerEnabled, config.lobbyId],
   );
 
   const localSeat = (() => {
@@ -162,25 +165,37 @@ function GameSession({
         setState((prev) => reduceGame(prev, action));
         return;
       }
-      if (localSeat == null) return;
       const ws = wsRef.current;
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      const controllerOnly = action.type === "NEW_HAND" || action.type === "RUNOUT_STEP";
+      if (controllerOnly) {
+        if (!isControllerRef.current) return;
+        ws.send(
+          JSON.stringify({
+            action: "gameAction",
+            tableId: config.lobbyId,
+            seat: localSeat ?? 0,
+            gameAction: action,
+          }),
+        );
+        return;
+      }
+      if (localSeat == null) return;
       ws.send(JSON.stringify({ action: "gameAction", tableId: config.lobbyId, seat: localSeat, gameAction: action }));
     },
     [multiplayerEnabled, localSeat, config.lobbyId],
   );
 
-  const applyAcceptedAction = useCallback(
-    (action: GameAction) => {
-      if (!isController) return;
-      setState((prev) => {
-        const next = reduceGame(prev, action);
-        publishState(next);
-        return next;
-      });
-    },
-    [isController, publishState],
-  );
+  const publishStateRef = useRef(publishState);
+  publishStateRef.current = publishState;
+
+  const applyControllerAction = useCallback((action: GameAction) => {
+    if (!isControllerRef.current) return;
+    flushSync(() => {
+      setState((prev) => reduceGame(prev, action));
+    });
+    publishStateRef.current(stateRef.current);
+  }, []);
 
   useEffect(() => {
     if (!multiplayerEnabled || !gamePlayWsUrl) return;
@@ -220,13 +235,16 @@ function GameSession({
       if (msg.type === "role" && msg.tableId === config.lobbyId) {
         const controller = msg.role === "controller";
         setIsController(controller);
-        if (controller) setSyncHint("You own the player seat for this table.");
-        else setSyncHint("Spectator mode — seat owner controls actions.");
+        if (controller) {
+          setSyncHint("You are the table controller (deal cards; your browser applies everyone’s plays).");
+        } else {
+          setSyncHint("Connected — claim a seat to act on your turn.");
+        }
         return;
       }
       if (msg.type === "actionAccepted" && msg.tableId === config.lobbyId) {
         if (looksLikeGameAction(msg.gameAction)) {
-          applyAcceptedAction(msg.gameAction);
+          applyControllerAction(msg.gameAction);
         }
         return;
       }
@@ -244,7 +262,7 @@ function GameSession({
       ws.close();
       if (wsRef.current === ws) wsRef.current = null;
     };
-  }, [multiplayerEnabled, gamePlayWsUrl, config.lobbyId, playerName, applyAcceptedAction]);
+  }, [multiplayerEnabled, gamePlayWsUrl, config.lobbyId, playerName, applyControllerAction]);
 
   useEffect(() => {
     if (!multiplayerEnabled || !isController || !isGameWsConnected) return;

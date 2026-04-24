@@ -209,13 +209,26 @@ async function buildServer() {
         const table = tables.get(tableId);
         if (!table) return;
         const playerName = socketPlayer.get(socket) ?? "Player";
-        if (table.seatOwners[String(seat)] !== playerName) {
+        const gaType = (data.gameAction as { type?: string })?.type;
+        /** Dealer / engine steps: not tied to a claimed seat; only the table controller may send. */
+        const controllerOnlyAction = gaType === "NEW_HAND" || gaType === "RUNOUT_STEP";
+        if (controllerOnlyAction) {
+          if (table.controllerName !== playerName) {
+            socket.send(
+              JSON.stringify({
+                type: "error",
+                message: "only the table controller can deal or advance the runout",
+              } satisfies OutgoingMessage),
+            );
+            return;
+          }
+        } else if (table.seatOwners[String(seat)] !== playerName) {
           socket.send(JSON.stringify({ type: "error", message: "you do not own this seat" } satisfies OutgoingMessage));
           return;
         }
         const st = table.state as { activeSeat?: number | null } | undefined;
         const at = st?.activeSeat;
-        if (typeof at === "number" && at !== seat && (data.gameAction as { type?: string })?.type !== "NEW_HAND") {
+        if (typeof at === "number" && at !== seat && gaType !== "NEW_HAND") {
           socket.send(JSON.stringify({ type: "error", message: "not your turn" } satisfies OutgoingMessage));
           return;
         }
