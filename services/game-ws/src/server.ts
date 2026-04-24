@@ -5,6 +5,7 @@ import type { WebSocket } from "ws";
 import type { IncomingMessage, OutgoingMessage, TableState } from "./types";
 
 const tables = new Map<string, TableState>();
+const socketTable = new WeakMap<WebSocket, string>();
 
 function getOrCreateTable(tableId: string): TableState {
   let t = tables.get(tableId);
@@ -15,11 +16,36 @@ function getOrCreateTable(tableId: string): TableState {
   return t;
 }
 
+function sendRole(tableId: string, table: TableState, socket: WebSocket) {
+  const msg: OutgoingMessage = {
+    type: "role",
+    tableId,
+    role: table.controller === socket ? "controller" : "viewer",
+  };
+  socket.send(JSON.stringify(msg));
+}
+
+function sendRolesToTable(tableId: string, table: TableState) {
+  for (const s of table.sockets) {
+    if (s.readyState !== 1) continue;
+    sendRole(tableId, table, s);
+  }
+}
+
 function removeSocketFromAllTables(socket: WebSocket, log: FastifyBaseLogger) {
   for (const [tableId, table] of tables) {
     if (!table.sockets.has(socket)) continue;
     table.sockets.delete(socket);
+    socketTable.delete(socket);
     log.info({ tableId, remaining: table.sockets.size }, "socket left table");
+    if (table.controller === socket) {
+      table.controller = table.sockets.values().next().value as WebSocket | undefined;
+      if (table.controller) {
+        table.seq += 1;
+        broadcast(tableId, { type: "controlChanged", tableId, seq: table.seq });
+      }
+      sendRolesToTable(tableId, table);
+    }
     if (table.sockets.size > 0) {
       table.seq += 1;
       broadcast(tableId, { type: "presence", tableId, seq: table.seq }, socket);
@@ -74,13 +100,69 @@ async function buildServer() {
         }
         const table = getOrCreateTable(tableId);
         table.sockets.add(socket);
+        socketTable.set(socket, tableId);
+        if (!table.controller) table.controller = socket;
         table.seq += 1;
         const joined: OutgoingMessage = { type: "joined", tableId, seq: table.seq };
         socket.send(JSON.stringify(joined));
+        sendRole(tableId, table, socket);
+        if (table.state !== undefined) {
+          socket.send(
+            JSON.stringify({
+              type: "tableState",
+              tableId,
+              seq: table.seq,
+              state: table.state,
+            } satisfies OutgoingMessage),
+          );
+        }
         if (table.sockets.size > 1) {
           table.seq += 1;
           broadcast(tableId, { type: "presence", tableId, seq: table.seq }, socket);
         }
+        return;
+      }
+
+      if (data.action === "syncState") {
+        const tableId = socketTable.get(socket);
+        if (!tableId || tableId !== data.tableId) {
+          socket.send(JSON.stringify({ type: "error", message: "join table first" } satisfies OutgoingMessage));
+          return;
+        }
+        const table = tables.get(tableId);
+        if (!table) return;
+        if (table.controller !== socket) {
+          socket.send(JSON.stringify({ type: "error", message: "only controller can sync" } satisfies OutgoingMessage));
+          return;
+        }
+        table.state = data.state;
+        table.seq += 1;
+        broadcast(
+          tableId,
+          {
+            type: "tableState",
+            tableId,
+            seq: table.seq,
+            state: table.state,
+          },
+        );
+        return;
+      }
+
+      if (data.action === "claimControl") {
+        const tableId = socketTable.get(socket);
+        if (!tableId || tableId !== data.tableId) {
+          socket.send(JSON.stringify({ type: "error", message: "join table first" } satisfies OutgoingMessage));
+          return;
+        }
+        const table = tables.get(tableId);
+        if (!table) return;
+        if (table.controller !== socket) {
+          table.controller = socket;
+          table.seq += 1;
+          broadcast(tableId, { type: "controlChanged", tableId, seq: table.seq });
+        }
+        sendRolesToTable(tableId, table);
         return;
       }
 

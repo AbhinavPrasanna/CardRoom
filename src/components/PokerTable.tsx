@@ -28,13 +28,16 @@ type Props = {
   state: GameState;
   dispatch: (a: GameAction) => void;
   onLeave: () => void;
+  isController?: boolean;
+  onTakeControl?: () => void;
 };
 
-export function PokerTable({ state, dispatch, onLeave }: Props) {
+export function PokerTable({ state, dispatch, onLeave, isController = true, onTakeControl }: Props) {
   const stateRef = useRef(state);
   stateRef.current = state;
 
   useEffect(() => {
+    if (!isController) return;
     if (state.pendingRunOut) return;
     const seat = state.activeSeat;
     if (seat === null) return;
@@ -48,15 +51,16 @@ export function PokerTable({ state, dispatch, onLeave }: Props) {
       dispatch(chooseBotAction(cur, s));
     }, delay);
     return () => window.clearTimeout(id);
-  }, [state.activeSeat, state.pendingRunOut, dispatch]);
+  }, [state.activeSeat, state.pendingRunOut, dispatch, isController]);
 
   useEffect(() => {
+    if (!isController) return;
     if (!state.pendingRunOut) return;
     const id = window.setTimeout(() => {
       dispatch({ type: "RUNOUT_STEP" });
     }, 780);
     return () => window.clearTimeout(id);
-  }, [state.pendingRunOut, state.street, state.board.length, dispatch]);
+  }, [state.pendingRunOut, state.street, state.board.length, dispatch, isController]);
 
   const human = state.players.find((p) => p.isHuman) ?? null;
   const isHumanTurn = human !== null && state.activeSeat === human.seat;
@@ -79,6 +83,7 @@ export function PokerTable({ state, dispatch, onLeave }: Props) {
   }, [minRaiseTotal, maxRaiseTotal, isHumanTurn]);
 
   const canDeal =
+    isController &&
     state.activeSeat === null &&
     (state.street === "hand_complete" || state.awaitingNextHand);
 
@@ -363,7 +368,7 @@ export function PokerTable({ state, dispatch, onLeave }: Props) {
           </div>
         ) : null}
 
-        {human && isHumanTurn ? (
+        {human && isHumanTurn && isController ? (
           <>
             <div className="controls-row">
               <button type="button" className="btn btn-danger" onClick={() => dispatch({ type: "FOLD" })}>
@@ -406,6 +411,15 @@ export function PokerTable({ state, dispatch, onLeave }: Props) {
               </div>
             ) : null}
           </>
+        ) : !isController ? (
+          <div className="msg-bar">
+            Read-only spectator mode.{" "}
+            {onTakeControl ? (
+              <button type="button" className="btn btn-secondary btn-sm" onClick={onTakeControl}>
+                Take control
+              </button>
+            ) : null}
+          </div>
         ) : state.pendingRunOut ? (
           <div className="msg-bar">Board running out…</div>
         ) : !human ? (

@@ -188,9 +188,8 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
         <div>
           <h1>Abhinav&apos;s Card Room</h1>
           <p className="online-lobby-lead">
-            The <strong>lobby</strong> (code + seat map + buy-ins) syncs over AWS for everyone in the same code. The
-            poker <strong>table</strong> after you click play still runs only in <strong>this browser</strong> — it is
-            not a shared online hand yet.
+            The <strong>lobby</strong> (code + seat map + buy-ins) syncs over AWS for everyone in the same code. After
+            you click play, the table can also sync live if the gameplay WebSocket endpoint is configured.
           </p>
         </div>
       </header>
@@ -214,9 +213,8 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
           </ol>
           <p className="online-lobby-limitation">
             If your friend never clicked <strong>Join lobby</strong> with your code, they are not in your room — Amplify
-            does not auto-match players. &quot;Open table &amp; play&quot; starts a separate local game on each device;
-            use the lobby first to agree on seats, then you can each open a table from the same layout if you want
-            parallel practice (true shared one-table multiplayer would need more backend work).
+            does not auto-match players. If both of you open the same lobby table, one player controls actions at a
+            time and everyone else sees the same live state.
           </p>
         </div>
 
@@ -233,7 +231,8 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
             (or bots you add later) can fill the ring.
           </li>
           <li>
-            When ready, <strong>Open table &amp; play</strong> starts the local game using this layout.
+            When ready, <strong>Open table &amp; play</strong> starts table play from this layout (shared when gameplay
+            sync is connected).
           </li>
         </ul>
 
@@ -447,7 +446,7 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
                 })
               }
             >
-              Open table &amp; play (local)
+            Open table &amp; play
             </button>
             {!canStart ? (
               <span className="lobby-hint">Add another player or bot, and sit one seat as you.</span>
