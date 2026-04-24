@@ -30,6 +30,10 @@ type Props = {
   isController?: boolean;
   onTakeControl?: () => void;
   localSeat?: number | null;
+  seatOwners?: Record<string, string>;
+  playerName?: string;
+  onClaimSeat?: (seat: number) => void;
+  onLeaveSeat?: (seat: number) => void;
 };
 
 export function PokerTable({
@@ -39,6 +43,10 @@ export function PokerTable({
   isController = true,
   onTakeControl,
   localSeat = null,
+  seatOwners = {},
+  playerName = "Player",
+  onClaimSeat,
+  onLeaveSeat,
 }: Props) {
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -272,6 +280,34 @@ export function PokerTable({
                     {showBlinds && isSb ? " · SB" : ""}
                     {showBlinds && isBb ? " · BB" : ""}
                   </div>
+                  {onClaimSeat && p.isHuman ? (
+                    <div style={{ marginTop: "0.2rem" }}>
+                      {(() => {
+                        const owner = seatOwners[String(p.seat)];
+                        const mine = owner === playerName;
+                        const open = !owner;
+                        if (mine) {
+                          return (
+                            <button type="button" className="btn btn-secondary btn-sm" onClick={() => onLeaveSeat?.(p.seat)}>
+                              Leave seat
+                            </button>
+                          );
+                        }
+                        if (open) {
+                          return (
+                            <button type="button" className="btn btn-secondary btn-sm" onClick={() => onClaimSeat(p.seat)}>
+                              Claim this seat
+                            </button>
+                          );
+                        }
+                        return (
+                          <span className="badge" title={`Owned by ${owner}`}>
+                            {owner}
+                          </span>
+                        );
+                      })()}
+                    </div>
+                  ) : null}
                   <div className="hole-cards">
                     {p.hole && p.hole.length === 2 ? (
                       <>

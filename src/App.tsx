@@ -299,6 +299,10 @@ function GameSession({
         isController={isController}
         onTakeControl={multiplayerEnabled ? requestControl : undefined}
         localSeat={localSeat}
+        seatOwners={seatOwners}
+        playerName={playerName}
+        onClaimSeat={multiplayerEnabled ? takeSeat : undefined}
+        onLeaveSeat={multiplayerEnabled ? leaveSeat : undefined}
       />
     </div>
   );

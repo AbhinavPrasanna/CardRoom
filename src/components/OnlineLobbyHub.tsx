@@ -52,6 +52,7 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
   const [serverHint, setServerHint] = useState<string | null>(null);
   const [syncEnabled, setSyncEnabled] = useState(false);
   const fromServer = useRef(false);
+  const pendingJoinRedirect = useRef(false);
 
   const { status, lastError, connect, disconnect, send, setOnMessage } = useCardRoomWs(wsUrl);
 
@@ -59,9 +60,26 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
     if (status !== "open") setSyncEnabled(false);
   }, [status]);
 
+  const startFromLobby = useCallback(
+    (liveLobby: TableLobby) => {
+      onPlay({
+        lobbyId: liveLobby.id,
+        lobbyName: liveLobby.name,
+        seats: [...liveLobby.seats],
+        minBuyIn: liveLobby.minBuyIn,
+        maxBuyIn: liveLobby.maxBuyIn,
+        smallBlind: liveLobby.smallBlind,
+        bigBlind: liveLobby.bigBlind,
+        seatBuyIns: [...liveLobby.seatBuyIns],
+      });
+    },
+    [onPlay],
+  );
+
   useEffect(() => {
     const handler = (msg: ServerMessage) => {
       if (msg.type === "error") {
+        pendingJoinRedirect.current = false;
         setServerHint(msg.message);
         return;
       }
@@ -69,7 +87,12 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
         fromServer.current = true;
         setServerHint(null);
         setSyncEnabled(true);
-        setLobby(normalizeLobbyFromServer(msg.lobby as TableLobby));
+        const liveLobby = normalizeLobbyFromServer(msg.lobby as TableLobby);
+        setLobby(liveLobby);
+        if (pendingJoinRedirect.current) {
+          pendingJoinRedirect.current = false;
+          startFromLobby(liveLobby);
+        }
         return;
       }
       if (msg.type === "presence") {
@@ -179,6 +202,7 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
       setServerHint("Enter a lobby code.");
       return;
     }
+    pendingJoinRedirect.current = true;
     send({ action: "joinLobby", lobbyId: code, playerName: playerName.trim() || "Player" });
   };
 
@@ -520,16 +544,7 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
               className="btn btn-primary"
               disabled={!canStart}
               onClick={() =>
-                onPlay({
-                  lobbyId: lobby.id,
-                  lobbyName: lobby.name,
-                  seats: [...lobby.seats],
-                  minBuyIn: lobby.minBuyIn,
-                  maxBuyIn: lobby.maxBuyIn,
-                  smallBlind: lobby.smallBlind,
-                  bigBlind: lobby.bigBlind,
-                  seatBuyIns: [...lobby.seatBuyIns],
-                })
+                startFromLobby(lobby)
               }
             >
             Open table &amp; play
