@@ -52,7 +52,8 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
   const [serverHint, setServerHint] = useState<string | null>(null);
   const [syncEnabled, setSyncEnabled] = useState(false);
   const fromServer = useRef(false);
-  const pendingJoinRedirect = useRef(false);
+  /** After Join lobby, first server snapshot shows this hint (then cleared on later syncs). */
+  const postJoinHintRef = useRef(false);
 
   const { status, lastError, connect, disconnect, send, setOnMessage } = useCardRoomWs(wsUrl);
 
@@ -79,19 +80,22 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
   useEffect(() => {
     const handler = (msg: ServerMessage) => {
       if (msg.type === "error") {
-        pendingJoinRedirect.current = false;
+        postJoinHintRef.current = false;
         setServerHint(msg.message);
         return;
       }
       if (msg.type === "lobbyCreated" || msg.type === "lobbyState") {
         fromServer.current = true;
-        setServerHint(null);
         setSyncEnabled(true);
         const liveLobby = normalizeLobbyFromServer(msg.lobby as TableLobby);
         setLobby(liveLobby);
-        if (pendingJoinRedirect.current) {
-          pendingJoinRedirect.current = false;
-          startFromLobby(liveLobby);
+        if (postJoinHintRef.current) {
+          postJoinHintRef.current = false;
+          setServerHint(
+            "You're in this lobby. The host finishes the seat map (needs at least two player seats to open). Then everyone taps Open table & play — including you.",
+          );
+        } else {
+          setServerHint(null);
         }
         return;
       }
@@ -202,7 +206,7 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
       setServerHint("Enter a lobby code.");
       return;
     }
-    pendingJoinRedirect.current = true;
+    postJoinHintRef.current = true;
     send({ action: "joinLobby", lobbyId: code, playerName: playerName.trim() || "Player" });
   };
 
@@ -252,13 +256,16 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
             </li>
             <li>
               <strong>Friend:</strong> Connect → type that code in <strong>CODE TO JOIN</strong> →{" "}
-              <strong>Join lobby</strong>. They should then see the <strong>same</strong> active code and seats as you.
+              <strong>Join lobby</strong>. They should see the <strong>same</strong> seat map. When it shows at least two
+              player seats, <strong>both</strong> of you tap <strong>Open table &amp; play</strong> (there is no
+              auto-jump for only one side).
             </li>
           </ol>
           <p className="online-lobby-limitation">
             If your friend never clicked <strong>Join lobby</strong> with your code, they are not in your room — Amplify
-            does not auto-match players. If both of you open the same lobby table, one player controls actions at a
-            time and everyone else sees the same live state.
+            does not auto-match players. The table view opens only after each person clicks{" "}
+            <strong>Open table &amp; play</strong> once the lobby has two or more player seats; otherwise one browser
+            can reach the table while the other stays on this screen.
           </p>
         </div>
 
