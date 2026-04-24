@@ -290,6 +290,12 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
           <p className="online-lobby-card-desc">
             Host creates a new code; guests paste the same code to join. Everyone in that code sees the same seat map.
           </p>
+          <div className="online-lobby-hint-banner online-lobby-hint-banner--muted" style={{ marginBottom: "0.7rem" }}>
+            <strong>How to open a shared lobby:</strong> Host clicks <strong>Create new lobby</strong>, then shares the
+            <strong> Active lobby</strong> code. Friend clicks <strong>Connect to card room</strong>, pastes that code in
+            <strong> CODE TO JOIN</strong>, then clicks <strong>Join lobby</strong>. If both are in the same lobby, both
+            screens show the same active code and seat updates.
+          </div>
           <div className="lobby-actions" style={{ marginTop: 0 }}>
             <button type="button" className="btn btn-primary" disabled={status !== "open"} onClick={handleCreate}>
               Create new lobby
