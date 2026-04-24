@@ -22,6 +22,23 @@ function countOpenSeats(seats: SeatKind[]) {
   return seats.filter((s) => s === "empty").length;
 }
 
+function normalizeLobbyFromServer(raw: TableLobby): TableLobby {
+  const d = createDefaultLobby();
+  const seatBuyIns = Array.from({ length: 6 }, (_, i) => {
+    const v = raw.seatBuyIns?.[i];
+    return typeof v === "number" && Number.isFinite(v) ? v : d.seatBuyIns[i];
+  });
+  return {
+    ...d,
+    ...raw,
+    minBuyIn: raw.minBuyIn ?? raw.humanBuyIn ?? d.minBuyIn,
+    maxBuyIn: raw.maxBuyIn ?? raw.botBuyIn ?? d.maxBuyIn,
+    smallBlind: raw.smallBlind ?? d.smallBlind,
+    bigBlind: raw.bigBlind ?? d.bigBlind,
+    seatBuyIns,
+  };
+}
+
 export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
   const [lobby, setLobby] = useState<TableLobby>(() => createDefaultLobby());
   const [playerName, setPlayerName] = useState(() => {
@@ -52,7 +69,7 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
         fromServer.current = true;
         setServerHint(null);
         setSyncEnabled(true);
-        setLobby(msg.lobby as TableLobby);
+        setLobby(normalizeLobbyFromServer(msg.lobby as TableLobby));
         return;
       }
       if (msg.type === "presence") {
@@ -113,22 +130,22 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
     });
   };
 
-  /** Full six-max ring: you + five bots (good for a quick full table). */
-  const applyFullRingBots = () => {
+  /** Full six-max ring: six human seats to be claimed by players. */
+  const applyFullRingPlayers = () => {
     patchLobby((prev) => {
       const n = prev.seats.length;
-      const next = Array.from({ length: n }, (_, i) => (i === 0 ? "human" : "bot")) as SeatKind[];
+      const next = Array.from({ length: n }, () => "human" as SeatKind);
       return { ...prev, seats: next };
     });
   };
 
-  /** Two seats filled: you vs one bot; rest empty. */
-  const applyHeadsUpVsBot = () => {
+  /** Two-player lobby: two human seats, rest empty. */
+  const applyHeadsUpPlayers = () => {
     patchLobby((prev) => {
       const n = prev.seats.length;
       const next = Array.from({ length: n }, () => "empty" as SeatKind);
       next[0] = "human";
-      if (n > 1) next[1] = "bot";
+      if (n > 1) next[1] = "human";
       return { ...prev, seats: next };
     });
   };
@@ -136,8 +153,7 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
   const occ = countOccupied(lobby.seats);
   const humans = countHumans(lobby.seats);
   const openSeats = countOpenSeats(lobby.seats);
-  const bots = lobby.seats.filter((s) => s === "bot").length;
-  const canStart = useMemo(() => occ >= 2 && humans >= 1, [occ, humans]);
+  const canStart = useMemo(() => occ >= 2 && humans >= 2, [occ, humans]);
 
   const handleCreate = () => {
     if (status !== "open") return;
@@ -145,8 +161,13 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
       action: "createLobby",
       name: lobby.name,
       seats: [...lobby.seats],
-      humanBuyIn: lobby.humanBuyIn,
-      botBuyIn: lobby.botBuyIn,
+      humanBuyIn: lobby.minBuyIn,
+      botBuyIn: lobby.maxBuyIn,
+      smallBlind: lobby.smallBlind,
+      bigBlind: lobby.bigBlind,
+      minBuyIn: lobby.minBuyIn,
+      maxBuyIn: lobby.maxBuyIn,
+      seatBuyIns: [...lobby.seatBuyIns],
       playerName: playerName.trim() || "Host",
     });
   };
@@ -227,7 +248,7 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
           </li>
           <li>
             <strong>Max open seats</strong> keeps one &quot;You&quot; seat and clears the rest so up to five friends
-            (or bots you add later) can fill the ring.
+            can fill the ring.
           </li>
           <li>
             When ready, <strong>Open table &amp; play</strong> starts table play from this layout (shared when gameplay
@@ -339,8 +360,8 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
         </div>
 
         <div className="online-lobby-card">
-          <h2>3 · Table name &amp; buy-ins</h2>
-          <p className="online-lobby-card-desc">Table name is included when you create the lobby; buy-ins apply when you start play.</p>
+          <h2>3 · Table rules &amp; buy-ins</h2>
+          <p className="online-lobby-card-desc">Host sets blinds and buy-in limits before opening the table.</p>
           <div className="lobby-row">
             <label htmlFor="onlineTableName">Table name</label>
             <input
@@ -356,45 +377,91 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
             <button type="button" className="btn btn-secondary btn-sm" onClick={applyMaxOpenSeats}>
               Max open seats (1 you + 5 empty)
             </button>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={applyFullRingBots}>
-              Full ring (you + 5 bots)
+            <button type="button" className="btn btn-secondary btn-sm" onClick={applyFullRingPlayers}>
+              Full ring (6 player seats)
             </button>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={applyHeadsUpVsBot}>
-              Heads-up (you + 1 bot)
+            <button type="button" className="btn btn-secondary btn-sm" onClick={applyHeadsUpPlayers}>
+              Heads-up (2 players)
             </button>
           </div>
           <div className="lobby-row">
-            <label htmlFor="onHumanBuy">Your buy-in ({MIN_BUY_IN}–{MAX_BUY_IN})</label>
+            <label htmlFor="onHumanBuy">Minimum buy-in ({MIN_BUY_IN}–{MAX_BUY_IN})</label>
             <input
               id="onHumanBuy"
               type="range"
               min={MIN_BUY_IN}
               max={MAX_BUY_IN}
               step={50}
-              value={lobby.humanBuyIn}
-              onChange={(e) => patchLobby((l) => ({ ...l, humanBuyIn: Number(e.target.value) }))}
+              value={lobby.minBuyIn}
+              onChange={(e) =>
+                patchLobby((l) => ({
+                  ...l,
+                  minBuyIn: Number(e.target.value),
+                  maxBuyIn: Math.max(Number(e.target.value), l.maxBuyIn),
+                }))
+              }
             />
-            <div className="lobby-value">{lobby.humanBuyIn} chips</div>
+            <div className="lobby-value">{lobby.minBuyIn} chips</div>
           </div>
           <div className="lobby-row">
-            <label htmlFor="onBotBuy">Bot buy-in ({MIN_BUY_IN}–{MAX_BUY_IN})</label>
+            <label htmlFor="onBotBuy">Maximum buy-in ({MIN_BUY_IN}–{MAX_BUY_IN})</label>
             <input
               id="onBotBuy"
               type="range"
               min={MIN_BUY_IN}
               max={MAX_BUY_IN}
               step={50}
-              value={lobby.botBuyIn}
-              onChange={(e) => patchLobby((l) => ({ ...l, botBuyIn: Number(e.target.value) }))}
+              value={lobby.maxBuyIn}
+              onChange={(e) =>
+                patchLobby((l) => ({
+                  ...l,
+                  maxBuyIn: Number(e.target.value),
+                  minBuyIn: Math.min(l.minBuyIn, Number(e.target.value)),
+                }))
+              }
             />
-            <div className="lobby-value">{lobby.botBuyIn} chips each</div>
+            <div className="lobby-value">{lobby.maxBuyIn} chips</div>
+          </div>
+          <div className="lobby-row">
+            <label htmlFor="onSmallBlind">Small blind</label>
+            <input
+              id="onSmallBlind"
+              type="number"
+              min={1}
+              max={1000}
+              value={lobby.smallBlind}
+              onChange={(e) =>
+                patchLobby((l) => {
+                  const sb = Math.max(1, Number(e.target.value) || 1);
+                  return { ...l, smallBlind: sb, bigBlind: Math.max(sb * 2, l.bigBlind) };
+                })
+              }
+              style={inputStyle}
+            />
+          </div>
+          <div className="lobby-row">
+            <label htmlFor="onBigBlind">Big blind</label>
+            <input
+              id="onBigBlind"
+              type="number"
+              min={2}
+              max={2000}
+              value={lobby.bigBlind}
+              onChange={(e) =>
+                patchLobby((l) => {
+                  const bb = Math.max(2, Number(e.target.value) || 2);
+                  return { ...l, bigBlind: bb, smallBlind: Math.min(l.smallBlind, Math.max(1, Math.floor(bb / 2))) };
+                })
+              }
+              style={inputStyle}
+            />
           </div>
         </div>
 
         <div className="online-lobby-card">
           <h2>4 · Seat map (six-max)</h2>
           <p className="online-lobby-card-desc">
-            Only one seat can be <strong>You</strong>. Edits debounce and sync to other players in the same lobby.
+            Player seats are reserved in lobby before play. Each player should claim one seat and set their buy-in.
           </p>
           <div className="online-lobby-stats">
             <span className="online-lobby-stat">
@@ -404,10 +471,7 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
               Open seats: <strong>{openSeats}</strong>
             </span>
             <span className="online-lobby-stat">
-              Bots: <strong>{bots}</strong>
-            </span>
-            <span className="online-lobby-stat">
-              You: <strong>{humans >= 1 ? "seated" : "not seated"}</strong>
+              Players seated: <strong>{humans}</strong>
             </span>
           </div>
           <div className="seat-grid">
@@ -415,18 +479,32 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
               <div key={seat} className={`seat-tile seat-tile--${kind}`}>
                 <div className="seat-tile-label">Seat {seat}</div>
                 <div className="seat-tile-status">
-                  {kind === "empty" ? "Open" : kind === "human" ? "You (player)" : "Bot"}
+                  {kind === "empty" ? "Open" : "Player seat"}
                 </div>
                 <div className="seat-tile-actions">
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSeat(seat, "human")}>
-                    Sit here as you
-                  </button>
-                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSeat(seat, "bot")}>
-                    Add bot
+                    Mark as player seat
                   </button>
                   <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSeat(seat, "empty")}>
                     Clear seat
                   </button>
+                  {kind === "human" ? (
+                    <input
+                      type="number"
+                      min={lobby.minBuyIn}
+                      max={lobby.maxBuyIn}
+                      value={lobby.seatBuyIns[seat] ?? lobby.minBuyIn}
+                      onChange={(e) =>
+                        patchLobby((l) => {
+                          const next = [...l.seatBuyIns];
+                          const v = Number(e.target.value) || l.minBuyIn;
+                          next[seat] = Math.min(l.maxBuyIn, Math.max(l.minBuyIn, v));
+                          return { ...l, seatBuyIns: next };
+                        })
+                      }
+                      style={{ ...inputStyle, maxWidth: 180 }}
+                    />
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -435,7 +513,7 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
 
         <div className="online-lobby-card" style={{ borderTop: "1px solid rgba(212, 168, 83, 0.2)", paddingTop: "1.25rem" }}>
           <h2>5 · Start play</h2>
-          <p className="online-lobby-card-desc">Needs at least two occupied seats and one human (you).</p>
+          <p className="online-lobby-card-desc">Needs at least two occupied human seats. Host deals the first hand.</p>
           <div className="lobby-actions">
             <button
               type="button"
@@ -446,15 +524,18 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
                   lobbyId: lobby.id,
                   lobbyName: lobby.name,
                   seats: [...lobby.seats],
-                  humanBuyIn: lobby.humanBuyIn,
-                  botBuyIn: lobby.botBuyIn,
+                  minBuyIn: lobby.minBuyIn,
+                  maxBuyIn: lobby.maxBuyIn,
+                  smallBlind: lobby.smallBlind,
+                  bigBlind: lobby.bigBlind,
+                  seatBuyIns: [...lobby.seatBuyIns],
                 })
               }
             >
             Open table &amp; play
             </button>
             {!canStart ? (
-              <span className="lobby-hint">Add another player or bot, and sit one seat as you.</span>
+              <span className="lobby-hint">Add at least two player seats to start.</span>
             ) : null}
           </div>
         </div>

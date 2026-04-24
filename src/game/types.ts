@@ -44,6 +44,8 @@ export interface GameState {
   players: Player[];
   board: Card[];
   street: Street;
+  smallBlind: number;
+  bigBlind: number;
   buttonSeat: number;
   activeSeat: number | null;
   deck: Card[];

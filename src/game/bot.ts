@@ -1,5 +1,4 @@
 import type { Card, GameAction, GameState } from "./types";
-import { BIG_BLIND } from "./types";
 import { bestHandScore } from "./handEvaluator";
 
 function powerPreflop(hole: Card[]): number {
@@ -24,7 +23,7 @@ function tryRaise(state: GameState, seat: number, desiredTotal: number): GameAct
   const maxTotal = p.betStreet + p.stack;
   const minOpen =
     state.currentBet === 0
-      ? Math.min(BIG_BLIND, maxTotal)
+      ? Math.min(state.bigBlind, maxTotal)
       : Math.min(state.currentBet + state.minRaiseIncrement, maxTotal);
   const target = Math.min(Math.max(desiredTotal, p.betStreet), maxTotal);
   const allIn = target === maxTotal;
@@ -45,7 +44,7 @@ export function chooseBotAction(state: GameState, seat: number): GameAction {
   const fear = Math.min(0.45, toCall / (p.stack + toCall + 1));
 
   if (toCall === 0) {
-    const open = BIG_BLIND * 2 + Math.floor(Math.random() * 3) * BIG_BLIND;
+    const open = state.bigBlind * 2 + Math.floor(Math.random() * 3) * state.bigBlind;
     const want = p.betStreet + Math.min(open, p.stack);
     if (streetPow > 32 + rnd * 10 && p.stack > 0) {
       const r = tryRaise(state, seat, want);
@@ -54,14 +53,14 @@ export function chooseBotAction(state: GameState, seat: number): GameAction {
     return { type: "CHECK" };
   }
 
-  if (streetPow < 22 && toCall >= BIG_BLIND * 2 && rnd < 0.55 + fear) {
+  if (streetPow < 22 && toCall >= state.bigBlind * 2 && rnd < 0.55 + fear) {
     return { type: "FOLD" };
   }
   if (streetPow < 28 && potOdds < 1.2 && rnd < 0.35) {
     return { type: "FOLD" };
   }
   if (streetPow > 40 && rnd > 0.35 && p.stack > toCall) {
-    const bump = state.minRaiseIncrement + Math.floor(rnd * 2) * BIG_BLIND;
+    const bump = state.minRaiseIncrement + Math.floor(rnd * 2) * state.bigBlind;
     const want = p.betStreet + toCall + bump;
     const r = tryRaise(state, seat, want);
     if (r) return r;

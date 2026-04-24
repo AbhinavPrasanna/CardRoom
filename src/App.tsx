@@ -87,7 +87,14 @@ function GameSession({
 }) {
   const multiplayerEnabled = Boolean(gamePlayWsUrl && config.lobbyId);
   const [state, setState] = useState<GameState>(() =>
-    createInitialStateFromSeats(config.seats, config.humanBuyIn, config.botBuyIn),
+    createInitialStateFromSeats(
+      config.seats,
+      config.minBuyIn,
+      config.maxBuyIn,
+      config.smallBlind,
+      config.bigBlind,
+      config.seatBuyIns,
+    ),
   );
   const [playerName] = useState(() => {
     if (typeof localStorage === "undefined") return "Player";
@@ -251,8 +258,8 @@ function GameSession({
         <div>
           <h1>Abhinav&apos;s Card Room</h1>
           <p>
-            No Limit Texas Hold&apos;em · {config.lobbyName} · Blinds 1 / 2 · You {config.humanBuyIn} chips · Bots{" "}
-            {config.botBuyIn} chips
+            No Limit Texas Hold&apos;em · {config.lobbyName} · Blinds {config.smallBlind} / {config.bigBlind} · Buy-in{" "}
+            {config.minBuyIn}–{config.maxBuyIn}
           </p>
           {multiplayerEnabled ? (
             <p style={{ marginTop: "0.35rem", color: "var(--muted)" }}>

@@ -5,6 +5,11 @@ export type WireLobby = {
   seats: ("empty" | "human" | "bot")[];
   humanBuyIn: number;
   botBuyIn: number;
+  minBuyIn?: number;
+  maxBuyIn?: number;
+  smallBlind?: number;
+  bigBlind?: number;
+  seatBuyIns?: number[];
 };
 
 /** Messages from Lambda → browser (WebSocket data frame JSON). */
@@ -24,6 +29,11 @@ export type ClientAction =
       seats?: WireLobby["seats"];
       humanBuyIn?: number;
       botBuyIn?: number;
+      minBuyIn?: number;
+      maxBuyIn?: number;
+      smallBlind?: number;
+      bigBlind?: number;
+      seatBuyIns?: number[];
       playerName?: string;
     }
   | { action: "joinLobby"; lobbyId: string; playerName?: string }

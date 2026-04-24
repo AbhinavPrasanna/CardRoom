@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GameAction, GameState } from "../game/types";
-import { BIG_BLIND, SMALL_BLIND } from "../game/types";
 import { sbBbSeats } from "../game/engine";
 import { chooseBotAction } from "../game/bot";
 import { CardView } from "./Card";
@@ -78,7 +77,7 @@ export function PokerTable({
   const minRaiseTotal = useMemo(() => {
     if (!human) return 0;
     if (state.currentBet === 0) {
-      return Math.min(BIG_BLIND, human.betStreet + human.stack);
+      return Math.min(state.bigBlind, human.betStreet + human.stack);
     }
     return Math.min(state.currentBet + state.minRaiseIncrement, human.betStreet + human.stack);
   }, [human, state.currentBet, state.minRaiseIncrement]);
@@ -320,7 +319,7 @@ export function PokerTable({
           <div>
             <span className="badge">NL Hold&apos;em</span>{" "}
             <span className="badge">
-              Blinds {SMALL_BLIND}/{BIG_BLIND}
+              Blinds {state.smallBlind}/{state.bigBlind}
             </span>{" "}
             <span className="badge">Hand #{state.handNumber}</span>
           </div>

@@ -6,25 +6,37 @@ export type TableLobby = {
   id: string;
   name: string;
   seats: SeatKind[];
-  humanBuyIn: number;
-  botBuyIn: number;
+  /** Legacy fields kept for server wire compatibility. */
+  humanBuyIn?: number;
+  botBuyIn?: number;
+  minBuyIn: number;
+  maxBuyIn: number;
+  smallBlind: number;
+  bigBlind: number;
+  seatBuyIns: number[];
 };
 
 export type GameStartConfig = {
   lobbyId: string;
   lobbyName: string;
   seats: SeatKind[];
-  humanBuyIn: number;
-  botBuyIn: number;
+  minBuyIn: number;
+  maxBuyIn: number;
+  smallBlind: number;
+  bigBlind: number;
+  seatBuyIns: number[];
 };
 
 export function createDefaultLobby(): TableLobby {
   return {
     id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `lobby-${Date.now()}`,
     name: "Your table",
-    seats: ["human", "bot", "bot", "bot", "bot", "bot"],
-    humanBuyIn: 1000,
-    botBuyIn: 1000,
+    seats: ["human", "empty", "empty", "empty", "empty", "empty"],
+    minBuyIn: 500,
+    maxBuyIn: 2000,
+    smallBlind: 1,
+    bigBlind: 2,
+    seatBuyIns: [1000, 1000, 1000, 1000, 1000, 1000],
   };
 }
 
@@ -60,7 +72,7 @@ export function LobbyHub({ lobby, setLobby, onPlay }: Props) {
 
   const occ = countOccupied(lobby.seats);
   const humans = countHumans(lobby.seats);
-  const canStart = useMemo(() => occ >= 2 && humans >= 1, [occ, humans]);
+  const canStart = useMemo(() => occ >= 2 && humans >= 2, [occ, humans]);
 
   return (
     <div className="app-shell">
@@ -82,30 +94,42 @@ export function LobbyHub({ lobby, setLobby, onPlay }: Props) {
         </p>
 
         <div className="lobby-row">
-          <label htmlFor="hubHumanBuy">Your buy-in ({MIN_BUY_IN}–{MAX_BUY_IN})</label>
+          <label htmlFor="hubHumanBuy">Table min buy-in ({MIN_BUY_IN}–{MAX_BUY_IN})</label>
           <input
             id="hubHumanBuy"
             type="range"
             min={MIN_BUY_IN}
             max={MAX_BUY_IN}
             step={50}
-            value={lobby.humanBuyIn}
-            onChange={(e) => patchLobby((l) => ({ ...l, humanBuyIn: Number(e.target.value) }))}
+            value={lobby.minBuyIn}
+            onChange={(e) =>
+              patchLobby((l) => ({
+                ...l,
+                minBuyIn: Number(e.target.value),
+                maxBuyIn: Math.max(Number(e.target.value), l.maxBuyIn),
+              }))
+            }
           />
-          <div className="lobby-value">{lobby.humanBuyIn} chips</div>
+          <div className="lobby-value">{lobby.minBuyIn} chips</div>
         </div>
         <div className="lobby-row">
-          <label htmlFor="hubBotBuy">Bot buy-in ({MIN_BUY_IN}–{MAX_BUY_IN})</label>
+          <label htmlFor="hubBotBuy">Table max buy-in ({MIN_BUY_IN}–{MAX_BUY_IN})</label>
           <input
             id="hubBotBuy"
             type="range"
             min={MIN_BUY_IN}
             max={MAX_BUY_IN}
             step={50}
-            value={lobby.botBuyIn}
-            onChange={(e) => patchLobby((l) => ({ ...l, botBuyIn: Number(e.target.value) }))}
+            value={lobby.maxBuyIn}
+            onChange={(e) =>
+              patchLobby((l) => ({
+                ...l,
+                maxBuyIn: Number(e.target.value),
+                minBuyIn: Math.min(l.minBuyIn, Number(e.target.value)),
+              }))
+            }
           />
-          <div className="lobby-value">{lobby.botBuyIn} chips each</div>
+          <div className="lobby-value">{lobby.maxBuyIn} chips</div>
         </div>
 
         <div className="seat-grid">
@@ -118,9 +142,6 @@ export function LobbyHub({ lobby, setLobby, onPlay }: Props) {
               <div className="seat-tile-actions">
                 <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSeat(seat, "human")}>
                   Sit as player
-                </button>
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSeat(seat, "bot")}>
-                  Add bot
                 </button>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSeat(seat, "empty")}>
                   Clear
@@ -140,15 +161,18 @@ export function LobbyHub({ lobby, setLobby, onPlay }: Props) {
                 lobbyId: lobby.id,
                 lobbyName: lobby.name,
                 seats: [...lobby.seats],
-                humanBuyIn: lobby.humanBuyIn,
-                botBuyIn: lobby.botBuyIn,
+                minBuyIn: lobby.minBuyIn,
+                maxBuyIn: lobby.maxBuyIn,
+                smallBlind: lobby.smallBlind,
+                bigBlind: lobby.bigBlind,
+                seatBuyIns: [...lobby.seatBuyIns],
               })
             }
           >
             Open table &amp; play
           </button>
           {!canStart ? (
-            <span className="lobby-hint">Need at least two seated players and one human (you).</span>
+            <span className="lobby-hint">Need at least two seated human players.</span>
           ) : null}
         </div>
       </section>

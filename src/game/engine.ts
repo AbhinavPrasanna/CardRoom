@@ -1,7 +1,7 @@
 import { freshDeck, shuffle } from "./deck";
 import { bestHandScore } from "./handEvaluator";
 import type { Card, GameAction, GameState, Player, SidePot } from "./types";
-import { BIG_BLIND, SMALL_BLIND } from "./types";
+import { BIG_BLIND, MAX_BUY_IN, MIN_BUY_IN, SMALL_BLIND } from "./types";
 
 function bySeat(a: Player, b: Player): number {
   return a.seat - b.seat;
@@ -167,8 +167,11 @@ export type SeatKind = "empty" | "human" | "bot";
 /** Build initial game state from exactly six seat slots (empty seats are omitted from play). */
 export function createInitialStateFromSeats(
   seats: SeatKind[],
-  humanBuyIn: number,
+  defaultHumanBuyIn: number,
   botBuyIn: number,
+  smallBlind = SMALL_BLIND,
+  bigBlind = BIG_BLIND,
+  seatBuyIns?: number[],
 ): GameState {
   if (seats.length !== 6) throw new Error("Expected six seats");
   const players: Player[] = [];
@@ -188,7 +191,7 @@ export function createInitialStateFromSeats(
         isHuman: true,
         isLocal,
         seat,
-        stack: humanBuyIn,
+        stack: Math.max(MIN_BUY_IN, Math.min(MAX_BUY_IN, seatBuyIns?.[seat] ?? defaultHumanBuyIn)),
         hole: null,
         folded: false,
         allIn: false,
@@ -216,13 +219,15 @@ export function createInitialStateFromSeats(
     players,
     board: [],
     street: "hand_complete",
+    smallBlind,
+    bigBlind,
     buttonSeat: 0,
     activeSeat: null,
     deck: [],
     pot: 0,
     currentBet: 0,
-    minRaiseIncrement: BIG_BLIND,
-    lastRaiseSize: BIG_BLIND,
+    minRaiseIncrement: bigBlind,
+    lastRaiseSize: bigBlind,
     bettingQueue: [],
     message: "Set your buy-in, then deal a hand.",
     handNumber: 0,
@@ -377,8 +382,8 @@ function dealNextCommunityStreet(state: GameState): GameState {
     street,
     pot,
     currentBet: 0,
-    minRaiseIncrement: BIG_BLIND,
-    lastRaiseSize: BIG_BLIND,
+    minRaiseIncrement: cleared.bigBlind,
+    lastRaiseSize: cleared.bigBlind,
     activeSeat: null,
     bettingQueue: [],
     message: street.toUpperCase(),
@@ -472,9 +477,9 @@ function startNewHand(state: GameState): GameState {
       allIn: p.stack - pay === 0,
     };
   };
-  post(sb, SMALL_BLIND);
-  post(bb, BIG_BLIND);
-  const currentBet = BIG_BLIND;
+  post(sb, state.smallBlind);
+  post(bb, state.bigBlind);
+  const currentBet = state.bigBlind;
   const pot = totalPotFromCommits(players);
   const base: GameState = {
     ...state,
@@ -485,8 +490,8 @@ function startNewHand(state: GameState): GameState {
     deck,
     pot,
     currentBet,
-    minRaiseIncrement: BIG_BLIND,
-    lastRaiseSize: BIG_BLIND,
+    minRaiseIncrement: state.bigBlind,
+    lastRaiseSize: state.bigBlind,
     winners: null,
     message: "Preflop",
     handNumber: state.handNumber + 1,
@@ -618,7 +623,7 @@ function handleRaise(state: GameState, totalBet: number): GameState {
   const newBet = Math.max(state.currentBet, ...players.map((x) => x.betStreet));
   const raisedBy = newBet - state.currentBet;
   const lastRaiseSize = raisedBy >= state.minRaiseIncrement ? raisedBy : state.lastRaiseSize;
-  const minRaiseIncrement = Math.max(BIG_BLIND, lastRaiseSize);
+  const minRaiseIncrement = Math.max(state.bigBlind, lastRaiseSize);
   const pot = totalPotFromCommits(players);
   const mid: GameState = {
     ...state,
