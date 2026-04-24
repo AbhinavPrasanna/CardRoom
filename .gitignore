@@ -5,3 +5,7 @@ dist/
 .env
 .env.local
 .env.*
+infra/cdk.out
+infra/node_modules
+services/game-ws/node_modules
+services/game-ws/dist

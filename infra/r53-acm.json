@@ -1,0 +1,17 @@
+{
+    "Changes":  [
+                    {
+                        "Action":  "UPSERT",
+                        "ResourceRecordSet":  {
+                                                  "Name":  "_9aae1b6c5b41fd2b399d28bc2e4c00c7.game.abspokergame.click.",
+                                                  "Type":  "CNAME",
+                                                  "TTL":  300,
+                                                  "ResourceRecords":  [
+                                                                          {
+                                                                              "Value":  "_2e4601b522ee034aa1fd1bb65737f629.jkddzztszm.acm-validations.aws."
+                                                                          }
+                                                                      ]
+                                              }
+                    }
+                ]
+}
