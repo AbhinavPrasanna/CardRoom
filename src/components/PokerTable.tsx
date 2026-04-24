@@ -416,7 +416,7 @@ export function PokerTable({ state, dispatch, onLeave, isController = true, onTa
             Read-only spectator mode.{" "}
             {onTakeControl ? (
               <button type="button" className="btn btn-secondary btn-sm" onClick={onTakeControl}>
-                Take control
+                Take player seat
               </button>
             ) : null}
           </div>

@@ -63,7 +63,7 @@ type GameWsIncoming =
   | { type: "joined"; tableId: string; seq: number }
   | { type: "presence"; tableId: string; seq: number }
   | { type: "tableState"; tableId: string; seq: number; state: unknown }
-  | { type: "role"; tableId: string; role: "controller" | "viewer" }
+  | { type: "role"; tableId: string; role: "controller" | "viewer"; playerName?: string }
   | { type: "controlChanged"; tableId: string; seq: number }
   | { type: "pong"; t: number }
   | { type: "error"; message: string };
@@ -141,7 +141,7 @@ function GameSession({
     ws.onopen = () => {
       setIsGameWsConnected(true);
       setSyncHint(null);
-      ws.send(JSON.stringify({ action: "joinTable", tableId: config.lobbyId }));
+      ws.send(JSON.stringify({ action: "joinTable", tableId: config.lobbyId, playerName }));
     };
     ws.onclose = () => {
       setIsGameWsConnected(false);
@@ -165,7 +165,8 @@ function GameSession({
       if (msg.type === "role" && msg.tableId === config.lobbyId) {
         const controller = msg.role === "controller";
         setIsController(controller);
-        if (controller) setSyncHint("You control this table.");
+        if (controller) setSyncHint("You own the player seat for this table.");
+        else setSyncHint("Spectator mode — seat owner controls actions.");
         return;
       }
       if (msg.type === "tableState" && msg.tableId === config.lobbyId && looksLikeGameState(msg.state)) {

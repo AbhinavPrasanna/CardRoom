@@ -6,6 +6,12 @@ import type { IncomingMessage, OutgoingMessage, TableState } from "./types";
 
 const tables = new Map<string, TableState>();
 const socketTable = new WeakMap<WebSocket, string>();
+const socketPlayer = new WeakMap<WebSocket, string>();
+
+function normalizePlayerName(raw: unknown): string {
+  const t = String(raw ?? "Player").trim();
+  return (t.length > 0 ? t : "Player").slice(0, 40);
+}
 
 function getOrCreateTable(tableId: string): TableState {
   let t = tables.get(tableId);
@@ -17,10 +23,12 @@ function getOrCreateTable(tableId: string): TableState {
 }
 
 function sendRole(tableId: string, table: TableState, socket: WebSocket) {
+  const playerName = socketPlayer.get(socket) ?? "Player";
   const msg: OutgoingMessage = {
     type: "role",
     tableId,
-    role: table.controller === socket ? "controller" : "viewer",
+    role: table.controllerName === playerName ? "controller" : "viewer",
+    playerName,
   };
   socket.send(JSON.stringify(msg));
 }
@@ -35,14 +43,19 @@ function sendRolesToTable(tableId: string, table: TableState) {
 function removeSocketFromAllTables(socket: WebSocket, log: FastifyBaseLogger) {
   for (const [tableId, table] of tables) {
     if (!table.sockets.has(socket)) continue;
+    const leavingName = socketPlayer.get(socket) ?? "Player";
     table.sockets.delete(socket);
     socketTable.delete(socket);
+    socketPlayer.delete(socket);
     log.info({ tableId, remaining: table.sockets.size }, "socket left table");
-    if (table.controller === socket) {
-      table.controller = table.sockets.values().next().value as WebSocket | undefined;
-      if (table.controller) {
+    if (table.controllerName === leavingName) {
+      const stillHasOwner = [...table.sockets].some((s) => (socketPlayer.get(s) ?? "Player") === leavingName);
+      if (!stillHasOwner) {
+        table.controllerName = table.sockets.size ? socketPlayer.get(table.sockets.values().next().value as WebSocket) : undefined;
         table.seq += 1;
-        broadcast(tableId, { type: "controlChanged", tableId, seq: table.seq });
+        if (table.controllerName) {
+          broadcast(tableId, { type: "controlChanged", tableId, seq: table.seq });
+        }
       }
       sendRolesToTable(tableId, table);
     }
@@ -98,10 +111,12 @@ async function buildServer() {
           socket.send(JSON.stringify({ type: "error", message: "tableId required" } satisfies OutgoingMessage));
           return;
         }
+        const playerName = normalizePlayerName(data.playerName);
         const table = getOrCreateTable(tableId);
         table.sockets.add(socket);
         socketTable.set(socket, tableId);
-        if (!table.controller) table.controller = socket;
+        socketPlayer.set(socket, playerName);
+        if (!table.controllerName) table.controllerName = playerName;
         table.seq += 1;
         const joined: OutgoingMessage = { type: "joined", tableId, seq: table.seq };
         socket.send(JSON.stringify(joined));
@@ -131,7 +146,8 @@ async function buildServer() {
         }
         const table = tables.get(tableId);
         if (!table) return;
-        if (table.controller !== socket) {
+        const playerName = socketPlayer.get(socket) ?? "Player";
+        if (table.controllerName !== playerName) {
           socket.send(JSON.stringify({ type: "error", message: "only controller can sync" } satisfies OutgoingMessage));
           return;
         }
@@ -157,8 +173,9 @@ async function buildServer() {
         }
         const table = tables.get(tableId);
         if (!table) return;
-        if (table.controller !== socket) {
-          table.controller = socket;
+        const playerName = socketPlayer.get(socket) ?? "Player";
+        if (table.controllerName !== playerName) {
+          table.controllerName = playerName;
           table.seq += 1;
           broadcast(tableId, { type: "controlChanged", tableId, seq: table.seq });
         }
