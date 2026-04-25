@@ -102,6 +102,9 @@ export function PokerTable({
     state.activeSeat === null &&
     (state.street === "hand_complete" || state.awaitingNextHand);
 
+  /** Local: only controller acts. Online with seat claims: your seat sends intents even if you are not the table controller. */
+  const canSendSeatActions = isController || Boolean(onClaimSeat);
+
   const humanMadeHandName = useMemo(() => {
     if (!human || human.folded) return null;
     const hole = human.hole;
@@ -414,7 +417,7 @@ export function PokerTable({
           </div>
         ) : null}
 
-        {human && isHumanTurn && isController ? (
+        {human && isHumanTurn && canSendSeatActions ? (
           <>
             <div className="controls-row">
               <button type="button" className="btn btn-danger" onClick={() => dispatch({ type: "FOLD" })}>
@@ -457,12 +460,12 @@ export function PokerTable({
               </div>
             ) : null}
           </>
-        ) : !isController ? (
+        ) : !isController && !human ? (
           <div className="msg-bar">
-            Read-only spectator mode.{" "}
+            Spectator — claim a seat on the table to get cards and act on your turn.{" "}
             {onTakeControl ? (
               <button type="button" className="btn btn-secondary btn-sm" onClick={onTakeControl}>
-                Take player seat
+                Become table controller
               </button>
             ) : null}
           </div>

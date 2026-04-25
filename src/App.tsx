@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import "./App.css";
 import { LobbyHub, createDefaultLobby, type GameStartConfig, type TableLobby } from "./components/LobbyHub";
@@ -128,12 +128,16 @@ function GameSession({
     [multiplayerEnabled, config.lobbyId],
   );
 
-  const localSeat = (() => {
-    const entry = Object.entries(seatOwners).find(([, owner]) => owner === playerName);
-    if (!entry) return null;
-    const n = Number(entry[0]);
-    return Number.isInteger(n) ? n : null;
-  })();
+  const localSeat = useMemo(() => {
+    if (multiplayerEnabled) {
+      const entry = Object.entries(seatOwners).find(([, owner]) => owner === playerName);
+      if (!entry) return null;
+      const n = Number(entry[0]);
+      return Number.isInteger(n) ? n : null;
+    }
+    const fromState = state.players.find((p) => p.isLocal)?.seat;
+    return typeof fromState === "number" ? fromState : null;
+  }, [multiplayerEnabled, seatOwners, playerName, state.players]);
 
   const requestControl = useCallback(() => {
     const ws = wsRef.current;
