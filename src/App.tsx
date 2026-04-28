@@ -41,6 +41,21 @@ export default function App() {
                 Online lobby (AWS)
               </button>
             </div>
+            {tableSource === "local" ? (
+              <p
+                style={{
+                  margin: "0.5rem 0 0",
+                  fontSize: "0.84rem",
+                  lineHeight: 1.5,
+                  color: "var(--muted)",
+                  maxWidth: 720,
+                }}
+              >
+                For a shared lobby code and sync with a friend in another browser, switch to{" "}
+                <strong>Online lobby (AWS)</strong>. <strong>Local only</strong> never talks to the server — if
+                multiplayer seems broken, this mode toggle is the first thing to check.
+              </p>
+            ) : null}
           </div>
         </div>
       ) : null}

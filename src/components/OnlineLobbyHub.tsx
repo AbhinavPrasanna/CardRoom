@@ -51,6 +51,10 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
   const [joinCode, setJoinCode] = useState("");
   const [serverHint, setServerHint] = useState<string | null>(null);
   const [syncEnabled, setSyncEnabled] = useState(false);
+  /** After Create / Join, until the first lobby snapshot — avoids stale “no shared lobby” copy. */
+  const [pendingLobbySync, setPendingLobbySync] = useState<"create" | "join" | null>(null);
+  const pendingLobbySyncRef = useRef<"create" | "join" | null>(null);
+  const [lobbyRole, setLobbyRole] = useState<"host" | "guest" | null>(null);
   const fromServer = useRef(false);
   /** After Join lobby, first server snapshot shows this hint (then cleared on later syncs). */
   const postJoinHintRef = useRef(false);
@@ -58,7 +62,12 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
   const { status, lastError, connect, disconnect, send, setOnMessage } = useCardRoomWs(wsUrl);
 
   useEffect(() => {
-    if (status !== "open") setSyncEnabled(false);
+    if (status !== "open") {
+      setSyncEnabled(false);
+      pendingLobbySyncRef.current = null;
+      setPendingLobbySync(null);
+      setLobbyRole(null);
+    }
   }, [status]);
 
   const startFromLobby = useCallback(
@@ -81,12 +90,19 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
     const handler = (msg: ServerMessage) => {
       if (msg.type === "error") {
         postJoinHintRef.current = false;
+        pendingLobbySyncRef.current = null;
+        setPendingLobbySync(null);
         setServerHint(msg.message);
         return;
       }
       if (msg.type === "lobbyCreated" || msg.type === "lobbyState") {
         fromServer.current = true;
         setSyncEnabled(true);
+        const pending = pendingLobbySyncRef.current;
+        pendingLobbySyncRef.current = null;
+        setPendingLobbySync(null);
+        if (pending === "create") setLobbyRole("host");
+        else if (pending === "join") setLobbyRole("guest");
         const liveLobby = normalizeLobbyFromServer(msg.lobby as TableLobby);
         setLobby(liveLobby);
         if (postJoinHintRef.current) {
@@ -108,6 +124,11 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
         return;
       }
       if (msg.type === "leftLobby") {
+        pendingLobbySyncRef.current = null;
+        setPendingLobbySync(null);
+        setLobbyRole(null);
+        setSyncEnabled(false);
+        setLobby(createDefaultLobby());
         setServerHint("You left the lobby (still connected).");
       }
     };
@@ -184,6 +205,8 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
 
   const handleCreate = () => {
     if (status !== "open") return;
+    pendingLobbySyncRef.current = "create";
+    setPendingLobbySync("create");
     send({
       action: "createLobby",
       name: lobby.name,
@@ -207,6 +230,8 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
       return;
     }
     postJoinHintRef.current = true;
+    pendingLobbySyncRef.current = "join";
+    setPendingLobbySync("join");
     send({ action: "joinLobby", lobbyId: code, playerName: playerName.trim() || "Player" });
   };
 
@@ -251,28 +276,35 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
           </p>
           <ol>
             <li>
-              <strong>Host:</strong> Connect → <strong>Create new lobby</strong> → copy or read the{" "}
-              <strong>Active lobby</strong> code below.
+              <strong>Host:</strong> Tap <strong>Connect to card room</strong> (section 1) →{" "}
+              <strong>Create new lobby</strong> (section 2). The lobby code appears as <strong>plain text</strong> in
+              section 2 under &quot;Active lobby&quot; (and in the status line under section 1). Share it verbally or use{" "}
+              <strong>Copy code</strong> if the clipboard works in your browser.
             </li>
             <li>
-              <strong>Friend:</strong> Connect → type that code in <strong>CODE TO JOIN</strong> →{" "}
-              <strong>Join lobby</strong>. They should see the <strong>same</strong> seat map. When it shows at least two
-              player seats, <strong>both</strong> of you tap <strong>Open table &amp; play</strong> (there is no
-              auto-jump for only one side).
+              <strong>Friend:</strong> Same site, <strong>Online lobby (AWS)</strong> →{" "}
+              <strong>Connect to card room</strong> → enter the code in <strong>CODE TO JOIN</strong> →{" "}
+              <strong>Join lobby</strong>. Both screens should list the <strong>same</strong> code and seat map.
+            </li>
+            <li>
+              In section 4, set at least <strong>two player seats</strong>. Then <strong>each person</strong> taps{" "}
+              <strong>Open table &amp; play</strong> in section 5. There is no auto-jump — both must click.
             </li>
           </ol>
           <p className="online-lobby-limitation">
-            If your friend never clicked <strong>Join lobby</strong> with your code, they are not in your room — Amplify
-            does not auto-match players. The table view opens only after each person clicks{" "}
-            <strong>Open table &amp; play</strong> once the lobby has two or more player seats; otherwise one browser
-            can reach the table while the other stays on this screen.
+            Amplify does not auto-match strangers. Your friend must use <strong>Join lobby</strong> with your exact code.
+          </p>
+          <p className="online-lobby-limitation" style={{ marginTop: "0.5rem" }}>
+            The table opens only after the lobby has two or more player seats <strong>and</strong> each person has
+            tapped <strong>Open table &amp; play</strong>. Otherwise one browser can reach the table while the other
+            stays here.
           </p>
         </div>
 
         <ul className="online-lobby-features">
           <li>
-            <strong>Connect</strong> once with your display name, then <strong>create</strong> a code or{" "}
-            <strong>join</strong> with a friend&apos;s code.
+            Tap <strong>Connect to card room</strong> once with your display name, then <strong>create</strong> a code
+            or <strong>join</strong> with a friend&apos;s code.
           </li>
           <li>
             <strong>Seat presets</strong> set the whole table in one click; you can still tweak individual seats below.
@@ -282,16 +314,18 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
             can fill the ring.
           </li>
           <li>
-            When ready, <strong>Open table &amp; play</strong> starts table play from this layout (shared when gameplay
-            sync is connected).
+            When ready, <strong>Open table &amp; play</strong> starts the table from this layout. Live dealing on the
+            table requires the separate gameplay WebSocket in the build — lobby connection alone is not full table
+            sync.
           </li>
         </ul>
 
         <div className="online-lobby-card">
           <h2>1 · Connect</h2>
           <p className="online-lobby-card-desc">
-            You must be connected before creating or joining a lobby. The card room server is configured in the app
-            build (not shown here).
+            You must be connected before creating or joining a lobby. This deployment already points at a lobby server
+            (no URL field here). If the status stays stuck on <strong>connecting</strong> or <strong>closed</strong>,
+            check network, VPN, or that you are on the same site build as your friend.
           </p>
           <div className="lobby-row" style={{ marginTop: "0.5rem" }}>
             <label htmlFor="playerName">Display name</label>
@@ -319,6 +353,9 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
                     className="btn btn-ghost"
                     onClick={() => {
                       send({ action: "leaveLobby" });
+                      pendingLobbySyncRef.current = null;
+                      setPendingLobbySync(null);
+                      setLobbyRole(null);
                       setSyncEnabled(false);
                       setLobby(createDefaultLobby());
                     }}
@@ -334,6 +371,34 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
             {syncEnabled ? <span className="badge">Lobby sync on</span> : <span className="badge">Lobby sync off</span>}
             {lastError ? <span style={{ color: "var(--danger)", fontSize: "0.88rem" }}>{lastError}</span> : null}
           </div>
+          {status === "open" ? (
+            <div className="online-lobby-session-summary" role="status" aria-live="polite">
+              <span className="online-lobby-session-summary-label">Session</span>
+              <span>
+                Connected as <strong>{(playerName.trim() || "Player").slice(0, 40)}</strong>
+                {syncEnabled && lobby.id ? (
+                  <>
+                    {" "}
+                    · Lobby <code className="online-lobby-session-code">{lobby.id}</code> ·{" "}
+                    {lobbyRole === "host" ? (
+                      <span>You are the host</span>
+                    ) : lobbyRole === "guest" ? (
+                      <span>You joined as guest</span>
+                    ) : (
+                      <span>Shared lobby active</span>
+                    )}{" "}
+                    · <span>{humans} player seats</span>
+                  </>
+                ) : pendingLobbySync === "create" ? (
+                  <> · Waiting for server to confirm your new lobby…</>
+                ) : pendingLobbySync === "join" ? (
+                  <> · Waiting for server to confirm join…</>
+                ) : (
+                  <> · No lobby yet — use section 2 after you connect.</>
+                )}
+              </span>
+            </div>
+          ) : null}
         </div>
 
         <div className="online-lobby-card">
@@ -342,10 +407,9 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
             Host creates a new code; guests paste the same code to join. Everyone in that code sees the same seat map.
           </p>
           <div className="online-lobby-hint-banner online-lobby-hint-banner--muted" style={{ marginBottom: "0.7rem" }}>
-            <strong>How to open a shared lobby:</strong> Host clicks <strong>Create new lobby</strong>, then shares the
-            <strong> Active lobby</strong> code. Friend clicks <strong>Connect to card room</strong>, pastes that code in
-            <strong> CODE TO JOIN</strong>, then clicks <strong>Join lobby</strong>. If both are in the same lobby, both
-            screens show the same active code and seat updates.
+            <strong>Same lobby check:</strong> After join/create, section 1 <strong>Session</strong> and the box below
+            should show the <strong>same lobby id</strong> on both browsers. If only one side shows a code, that side is
+            not in the other&apos;s room yet.
           </div>
           <div className="lobby-actions" style={{ marginTop: 0 }}>
             <button type="button" className="btn btn-primary" disabled={status !== "open"} onClick={handleCreate}>
@@ -371,11 +435,24 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
             </button>
           </div>
           {syncEnabled && lobby.id ? (
-            <div className="online-lobby-code-box">
-              <div className="online-lobby-code-box-label">Active lobby — send this to your friend</div>
-              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.65rem" }}>
-                <code>{lobby.id}</code>
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => void copyLobbyCode()}>
+            <div
+              className="online-lobby-code-box"
+              role="region"
+              aria-labelledby="active-lobby-code-heading"
+            >
+              <div id="active-lobby-code-heading" className="online-lobby-code-box-label">
+                Active lobby — code (readable on screen; copy is optional)
+              </div>
+              <div className="online-lobby-code-row" aria-live="polite" aria-atomic="true">
+                <code className="online-lobby-code-plain" aria-label={`Lobby code: ${lobby.id}`}>
+                  {lobby.id}
+                </code>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  aria-label={`Copy lobby code ${lobby.id} to clipboard`}
+                  onClick={() => void copyLobbyCode()}
+                >
                   Copy code
                 </button>
               </div>
@@ -383,8 +460,12 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
           ) : (
             <p className="online-lobby-card-desc" style={{ marginTop: "0.65rem", marginBottom: 0 }}>
               {status !== "open"
-                ? "Connect first, then the host creates a lobby or you join with a code."
-                : "No shared lobby on the server yet — host taps Create, or paste a code and Join."}
+                ? "Tap Connect to card room in section 1 first, then create a lobby or join with a code here."
+                : pendingLobbySync === "create"
+                  ? "Creating your lobby on the server… The code will appear here and in the Session line (section 1) as soon as the server responds."
+                  : pendingLobbySync === "join"
+                    ? "Joining that lobby… The shared code and seat map appear here when the server confirms you are in the room."
+                    : "No shared lobby on the server yet — host taps Create new lobby, or paste a code and tap Join lobby."}
             </p>
           )}
           {serverHint ? <div className="online-lobby-hint-banner online-lobby-hint-banner--muted">{serverHint}</div> : null}
@@ -544,7 +625,10 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
 
         <div className="online-lobby-card" style={{ borderTop: "1px solid rgba(212, 168, 83, 0.2)", paddingTop: "1.25rem" }}>
           <h2>5 · Start play</h2>
-          <p className="online-lobby-card-desc">Needs at least two occupied human seats. Host deals the first hand.</p>
+          <p className="online-lobby-card-desc">
+            Needs at least two seats marked <strong>player seat</strong> in section 4. Host deals the first hand. Each
+            person must tap this button on their own device — it does not open for the other player automatically.
+          </p>
           <div className="lobby-actions">
             <button
               type="button"
@@ -557,7 +641,10 @@ export function OnlineLobbyHub({ wsUrl, onPlay }: Props) {
             Open table &amp; play
             </button>
             {!canStart ? (
-              <span className="lobby-hint">Add at least two player seats to start.</span>
+              <span className="lobby-hint">
+                In section 4, use seat presets (e.g. Heads-up) or mark at least two seats as player seat. Currently{" "}
+                {humans} player seat{humans === 1 ? "" : "s"}.
+              </span>
             ) : null}
           </div>
         </div>

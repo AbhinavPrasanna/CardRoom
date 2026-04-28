@@ -196,9 +196,47 @@
   margin-bottom: 0.25rem;
 }
 
-.online-lobby-code-box code {
+.online-lobby-code-box code,
+.online-lobby-code-plain {
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.online-lobby-code-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.online-lobby-session-summary {
+  margin-top: 0.65rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid rgba(120, 200, 255, 0.22);
+  background: rgba(30, 55, 75, 0.28);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: var(--text);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.65rem;
+  align-items: baseline;
+}
+
+.online-lobby-session-summary-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.online-lobby-session-code {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.95rem;
   font-weight: 700;
   color: var(--gold);
 }

@@ -1,0 +1,23 @@
+---
+description: >-
+  When the user asks to push to GitHub, verify build and push, ship changes, or
+  sync the branch — read the project skill and only run git in this repository.
+alwaysApply: false
+---
+
+# Verify build and push (this repo only)
+
+## Follow the skill first
+
+Read and follow every step in `.cursor/skills/verify-build-push-github/SKILL.md` (build → `git add -A` → commit → push). Do not skip the build or reorder those steps.
+
+## This repository only
+
+- Treat **this workspace** as the CardRoom git repository root. Before any `git` command, set the shell working directory to the workspace root (the folder that contains this `.cursor/rules/` file).
+- **Do not** run `git add`, `git commit`, or `git push` from a parent directory, a sibling folder, or another clone unless the user explicitly names a different repo.
+- **Do not** stage or commit files outside the repo root reported by `git rev-parse --show-toplevel` from that root. Using `git add -A` is allowed **only** after `cd` to that root so all paths stay inside this repository.
+- **Do not** push branches or remotes for other projects while performing this workflow.
+
+## Quick verification (optional)
+
+From the repo root: `git rev-parse --show-toplevel` should match the workspace path you were given for CardRoom. If it does not, stop and confirm with the user before pushing.
